@@ -80,13 +80,16 @@ export async function buscarLicitacoesEmAberto(params: {
 } = {}): Promise<PNCPResponse> {
   const {
     pagina = 1,
-    tamanhoPagina = 100 // Aumentado para pegar mais resultados
+    tamanhoPagina = 50 // Mínimo 10, usando 50 para pegar mais resultados
   } = params;
 
-  console.log('🔍 Buscando licitações em aberto (sem filtros):', { pagina, tamanhoPagina });
+  const dataFinal = formatDate(new Date()); // Data de hoje
+
+  console.log('🔍 Buscando licitações em aberto (sem filtros):', { dataFinal, pagina, tamanhoPagina });
 
   const response = await pncpApi.get('/v1/contratacoes/proposta', {
     params: {
+      dataFinal, // Parâmetro obrigatório
       pagina,
       tamanhoPagina
     }
