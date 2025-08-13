@@ -211,26 +211,49 @@ app.get("/api/pncp/recentes", async (req, res) => {
     console.log('🔍 Recentes - Datas:', { dInicial, dFinal });
     console.log('🔍 Recentes - Estratégia: Buscar por período e ordenar no backend por dataInclusao > dataPublicacaoPncp > dataAtualizacao');
 
-    // paginação total em /v1/contratacoes/publicacao
-    const baseParams = {
-      codigoModalidadeContratacao: modalidade,
-      dataInicial: dInicial,
-      dataFinal: dFinal,
-      pagina: 1,
-      tamanhoPagina,
-    };
+    // Busca em múltiplas modalidades para ter mais variedade
+    const modalidades = [6, 4, 5, 8, 7, 12]; // Pregão Eletrônico, Concorrência, Dispensa, Pregão Presencial, Credenciamento
+    const out: any[] = [];
 
-    const first = await AXIOS.get("/v1/contratacoes/publicacao", { params: baseParams }).then(r => r.data);
-    const out = Array.isArray(first?.conteudo) ? [...first.conteudo] : (first?.data || []);
-    const totalPaginas = first?.paginacao?.totalPaginas ?? first?.totalPaginas ?? 1;
+    for (const modalidade of modalidades) {
+      try {
+        console.log(`🔍 Buscando modalidade ${modalidade}...`);
+        
+        const baseParams = {
+          codigoModalidadeContratacao: modalidade,
+          dataInicial: dInicial,
+          dataFinal: dFinal,
+          pagina: 1,
+          tamanhoPagina,
+        };
 
-    for (let p = 2; p <= totalPaginas; p++) {
-      const page = await AXIOS.get("/v1/contratacoes/publicacao", {
-        params: { ...baseParams, pagina: p },
-      }).then(r => r.data);
-      const chunk = Array.isArray(page?.conteudo) ? page.conteudo : (page?.data || []);
-      out.push(...chunk);
+        const first = await AXIOS.get("/v1/contratacoes/publicacao", { params: baseParams }).then(r => r.data);
+        const modalidadeResults = Array.isArray(first?.conteudo) ? [...first.conteudo] : (first?.data || []);
+        const totalPaginas = first?.paginacao?.totalPaginas ?? first?.totalPaginas ?? 1;
+
+        // Busca todas as páginas desta modalidade
+        for (let p = 2; p <= totalPaginas; p++) {
+          const page = await AXIOS.get("/v1/contratacoes/publicacao", {
+            params: { ...baseParams, pagina: p },
+          }).then(r => r.data);
+          const chunk = Array.isArray(page?.conteudo) ? page.conteudo : (page?.data || []);
+          modalidadeResults.push(...chunk);
+        }
+
+        out.push(...modalidadeResults);
+        console.log(`✅ Modalidade ${modalidade}: ${modalidadeResults.length} licitações`);
+      } catch (error) {
+        console.warn(`⚠️ Erro ao buscar modalidade ${modalidade}:`, error);
+      }
     }
+
+    // Remove duplicatas baseado no numeroControlePNCP
+    const licitacoesUnicas = out.filter((licitacao, index, self) => 
+      index === self.findIndex(l => l.numeroControlePNCP === licitacao.numeroControlePNCP)
+    );
+
+    console.log(`📊 Total de licitações encontradas: ${out.length}`);
+    console.log(`📊 Licitações únicas após remoção de duplicatas: ${licitacoesUnicas.length}`);
 
     // ordenar: 1) dataInclusao (mais preciso p/ "adicionadas na plataforma")
     //          2) fallback para dataPublicacaoPncp
@@ -252,7 +275,7 @@ app.get("/api/pncp/recentes", async (req, res) => {
       return [norm(di), norm(dp), norm(da)];
     };
 
-    out.sort((a, b) => {
+    licitacoesUnicas.sort((a, b) => {
       const [adi, adp, ada] = toKey(a);
       const [bdi, bdp, bda] = toKey(b);
       
@@ -266,12 +289,12 @@ app.get("/api/pncp/recentes", async (req, res) => {
       return bda - ada;
     });
 
-    const topo = out.slice(0, limite);
+    const topo = licitacoesUnicas.slice(0, limite);
 
     return res.json({
       janela: { de: dInicial, ate: dFinal, dias },
       ordenadoPor: ["dataInclusao", "dataPublicacaoPncp", "dataAtualizacao"],
-      totalEncontrado: out.length,
+      totalEncontrado: licitacoesUnicas.length,
       totalRetornado: topo.length,
       conteudo: topo,
     });
