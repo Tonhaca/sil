@@ -1,204 +1,151 @@
-# SIL - Sistema Inteligente de Licitações
+# Sistema Inteligente de Licitações (SIL)
 
-Sistema web para busca e consulta de licitações públicas do Brasil através da API do PNCP (Portal Nacional de Contratações Públicas).
+Sistema para consulta de licitações no Portal Nacional de Contratações Públicas (PNCP) com interface moderna e dados em tempo real.
 
-## 🚀 Características
+## 🚀 Funcionalidades
 
-- **Dados Reais**: Consome diretamente a API pública do PNCP sem dados mockados
-- **Busca Inteligente**: Pesquisa por itens específicos (ex: "mamadeira" encontra mamadeiras de 0-6 anos, com bico de silicone, etc.)
-- **Filtros Avançados**: Por data, localização, modalidade, situação, valor
-- **Interface Moderna**: Design responsivo com Tailwind CSS
-- **Detalhes Completos**: Visualização completa de cada licitação com documentos
-- **Paginação**: Navegação eficiente entre resultados
-- **Deploy Automático**: Configurado para Railway
+- **Busca por Termo**: Pesquisa licitações por palavra-chave
+- **Busca por Item**: Pesquisa licitações por item específico
+- **Licitações em Aberto**: Visualiza licitações recebendo propostas
+- **Filtros Avançados**: Por período, localização, valor estimado
+- **Dados Reais**: Integração direta com a API oficial do PNCP
+- **Fallback Inteligente**: Web scraping quando a API não responde
 
 ## 🛠️ Tecnologias
 
-- **Frontend**: React 18 + TypeScript
-- **Build Tool**: Vite
+- **Frontend**: React 18 + TypeScript + Vite
 - **Styling**: Tailwind CSS
-- **Icons**: Lucide React
 - **HTTP Client**: Axios
-- **Date Handling**: date-fns
+- **Validação**: Zod
+- **Testes**: Vitest
 - **Deploy**: Railway
 
-## 📋 Pré-requisitos
+## 📦 Instalação
 
-- Node.js 18+ 
-- npm ou yarn
-
-## 🚀 Instalação e Execução
-
-### Desenvolvimento Local
-
-1. **Clone o repositório**
 ```bash
-git clone <url-do-repositorio>
+# Clone o repositório
+git clone <repository-url>
 cd sistema-inteligente-licitacoes
-```
 
-2. **Instale as dependências**
-```bash
+# Instale as dependências
 npm install
-```
 
-3. **Execute em modo desenvolvimento**
-```bash
+# Execute em desenvolvimento
 npm run dev
-```
 
-4. **Acesse a aplicação**
-```
-http://localhost:3000
-```
-
-### Build para Produção
-
-```bash
+# Execute em produção
 npm run build
-npm run preview
+npm start
 ```
 
-## 🚀 Deploy no Railway
-
-### Configuração Automática
-
-1. **Conecte o repositório ao Railway**
-   - Acesse [railway.app](https://railway.app)
-   - Conecte sua conta GitHub
-   - Selecione este repositório
-
-2. **Deploy Automático**
-   - O Railway detectará automaticamente a configuração
-   - O build e deploy acontecerão automaticamente
-   - A URL será gerada automaticamente
-
-### Configuração Manual (se necessário)
+## 🧪 Testes
 
 ```bash
-# Instale o CLI do Railway
-npm install -g @railway/cli
+# Executar todos os testes
+npm run test:run
 
-# Login
-railway login
+# Executar testes em modo watch
+npm run test
 
-# Deploy
-railway up
+# Interface visual dos testes
+npm run test:ui
 ```
 
-## 📱 Funcionalidades
+## 🔌 API Endpoints
 
-### 🔍 Busca Inteligente
-- Pesquisa por termos gerais
-- Busca específica por itens
-- Resultados ordenados por data mais recente
+### Rotas HTTP (Conforme recomendação ChatGPT 5)
 
-### 🎯 Filtros Avançados
-- **Período**: Data de publicação
-- **Localização**: UF e município
-- **Valor**: Range de valores estimados
-- **Modalidade**: Pregão, Concorrência, etc.
-- **Situação**: Em aberto, Homologada, etc.
+#### `GET /api/pncp/recebendo-proposta`
+Busca licitações com período de recebimento de propostas em aberto.
 
-### 📊 Visualização de Dados
-- Cards informativos de cada licitação
-- Detalhes completos em modal
-- Informações do órgão contratante
-- Itens da contratação
-- Documentos disponíveis
-- Cronograma de datas importantes
+**Parâmetros:**
+- `modalidade` (number, default: 6) - Código da modalidade
+- `dataFinal` (string AAAAMMDD, default: hoje) - Data final
+- `pagina` (number, default: 1) - Número da página
+- `tamanhoPagina` (number, default: 500) - Tamanho da página
+- `todasPaginas` (boolean, default: true) - Buscar todas as páginas
 
-### 📄 Documentos
-- Acesso direto aos documentos da licitação
-- Links para edital, anexos e outros arquivos
-- Download facilitado
+**Exemplo:**
+```bash
+curl "http://localhost:3000/api/pncp/recebendo-proposta?modalidade=6&todasPaginas=true"
+```
 
-## 🏗️ Estrutura do Projeto
+#### `GET /api/pncp/publicadas`
+Busca licitações publicadas no período especificado.
+
+**Parâmetros:**
+- `modalidade` (number, obrigatório) - Código da modalidade
+- `dataInicial` (string AAAAMMDD, obrigatório) - Data inicial
+- `dataFinal` (string AAAAMMDD, obrigatório) - Data final
+- `pagina` (number, default: 1) - Número da página
+- `tamanhoPagina` (number, default: 500) - Tamanho da página
+- `todasPaginas` (boolean, default: true) - Buscar todas as páginas
+
+**Exemplo:**
+```bash
+curl "http://localhost:3000/api/pncp/publicadas?modalidade=6&dataInicial=20250801&dataFinal=20250813&todasPaginas=true"
+```
+
+## 📊 Estrutura do Projeto
 
 ```
 src/
-├── components/          # Componentes React
-│   ├── Header.tsx      # Cabeçalho com busca
-│   ├── Sidebar.tsx     # Filtros avançados
-│   ├── ContratacaoCard.tsx # Card de licitação
-│   ├── Pagination.tsx  # Navegação de páginas
-│   └── ContratacaoDetalhes.tsx # Modal de detalhes
-├── hooks/              # Hooks customizados
-│   └── useContratacoes.ts # Gerenciamento de estado
-├── services/           # Serviços de API
-│   └── pncpApi.ts     # Integração com PNCP
-├── types/              # Tipos TypeScript
-│   └── pncp.ts        # Interfaces da API
-├── App.tsx            # Componente principal
-├── main.tsx           # Ponto de entrada
-└── index.css          # Estilos globais
+├── api/pncp/                    # Rotas HTTP (ChatGPT 5)
+│   ├── recebendo-proposta.ts
+│   └── publicadas.ts
+├── components/                  # Componentes React
+├── hooks/                      # Custom hooks
+├── services/                   # Serviços de API
+│   ├── pncpApi.ts             # Integração principal
+│   ├── pncpClient.ts          # Cliente Axios
+│   ├── pncpService.ts         # Lógica de negócio
+│   └── webScrapingService.ts  # Fallback web scraping
+├── types/                     # Tipos TypeScript
+│   ├── pncp.ts               # Tipos principais
+│   └── pncpApi.ts            # Tipos da API
+└── utils/                     # Utilitários
+    └── date.ts               # Helpers de data
+
+tests/                         # Testes unitários
+├── date.test.ts              # Testes de data
+└── setup.ts                  # Setup dos testes
 ```
 
-## 🔌 API do PNCP
+## 🔧 Configuração
 
-O sistema consome a API pública do PNCP disponível em:
-- **Documentação**: https://pncp.gov.br/api/consulta/swagger-ui/index.html#/
-- **Manual**: https://www.gov.br/pncp/pt-br/central-de-conteudo/manuais/versoes-anteriores/ManualPNCPAPIConsultasVerso1.0.pdf
-- **Site Oficial**: https://pncp.gov.br
+### Variáveis de Ambiente
 
-### Endpoints Utilizados
-- `/contratacoes` - Busca por data
-- `/contratacoes/em-aberto` - Licitações em aberto
-- `/contratacoes/filtros` - Busca com filtros
-- `/contratacoes/busca` - Busca por termo
-- `/contratacoes/por-item` - Busca por item específico
+```env
+# Porta do servidor (opcional)
+PORT=3000
 
-## 🎨 Design System
-
-### Cores
-- **Primary**: Azul (#3B82F6)
-- **Secondary**: Cinza (#64748B)
-- **Success**: Verde (#10B981)
-- **Warning**: Amarelo (#F59E0B)
-- **Error**: Vermelho (#EF4444)
-
-### Componentes
-- Cards com sombra suave
-- Botões com estados hover
-- Inputs com foco destacado
-- Modais responsivos
-- Paginação intuitiva
-
-## 📱 Responsividade
-
-- **Mobile First**: Design otimizado para dispositivos móveis
-- **Tablet**: Layout adaptativo para tablets
-- **Desktop**: Interface completa para desktop
-- **Sidebar**: Colapsável em dispositivos móveis
-
-## 🔧 Scripts Disponíveis
-
-```bash
-npm run dev          # Desenvolvimento
-npm run build        # Build para produção
-npm run preview      # Preview do build
-npm run lint         # Linting do código
+# URL base da API do PNCP
+PNCP_BASE_URL=https://pncp.gov.br/api/consulta
 ```
 
-## 🐛 Troubleshooting
+### Modalidades de Contratação
 
-### Problemas Comuns
+- `6` - Pregão Eletrônico
+- `4` - Concorrência Eletrônica
+- `5` - Concorrência Presencial
+- `8` - Dispensa
+- `9` - Inexigibilidade
 
-1. **Erro de CORS**
-   - A API do PNCP pode ter restrições de CORS
-   - Use um proxy ou configure headers adequados
+## 🚀 Deploy
 
-2. **Timeout nas Requisições**
-   - A API pode ser lenta em horários de pico
-   - Timeout configurado para 30 segundos
+### Railway
 
-3. **Dados Não Carregam**
-   - Verifique a conectividade com a API
-   - Consulte os logs do console
+1. Conecte seu repositório ao Railway
+2. Configure as variáveis de ambiente
+3. Deploy automático a cada push
 
-## 📄 Licença
+### Outras Plataformas
 
-Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+O projeto é compatível com qualquer plataforma que suporte Node.js.
+
+## 📝 Licença
+
+MIT License - veja o arquivo [LICENSE](LICENSE) para detalhes.
 
 ## 🤝 Contribuição
 
@@ -210,11 +157,4 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 
 ## 📞 Suporte
 
-Para suporte e dúvidas:
-- Abra uma issue no GitHub
-- Consulte a documentação da API do PNCP
-- Verifique os logs do console
-
----
-
-**Desenvolvido com ❤️ para facilitar o acesso às licitações públicas do Brasil**
+Para suporte, abra uma issue no repositório ou entre em contato com a equipe SIL.

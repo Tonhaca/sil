@@ -9,6 +9,7 @@ interface UseContratacoesReturn {
   totalRegistros: number;
   totalPaginas: number;
   paginaAtual: number;
+  usandoFallback: boolean;
   buscarPorTermo: (termo: string) => Promise<void>;
   buscarPorItem: (item: string) => Promise<void>;
   buscarComFiltros: (filtros: FiltrosContratacao) => Promise<void>;
@@ -26,13 +27,15 @@ export const useContratacoes = (): UseContratacoesReturn => {
   const [totalPaginas, setTotalPaginas] = useState(0);
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [filtrosAtuais, setFiltrosAtuais] = useState<FiltrosContratacao>({});
+  const [usandoFallback, setUsandoFallback] = useState(false);
 
-  const processarResposta = useCallback((response: PNCPResponse<Contratacao>) => {
+  const processarResposta = useCallback((response: PNCPResponse<Contratacao>, isFallback: boolean = false) => {
     setContratacoes(response.data);
     setTotalRegistros(response.totalRegistros);
     setTotalPaginas(response.totalPaginas);
     setPaginaAtual(response.paginaAtual);
     setError(null);
+    setUsandoFallback(isFallback);
   }, []);
 
   const executarBusca = useCallback(async (
@@ -41,10 +44,15 @@ export const useContratacoes = (): UseContratacoesReturn => {
   ) => {
     setLoading(true);
     setError(null);
+    setUsandoFallback(false);
     
     try {
       const response = await buscaFunction();
-      processarResposta(response);
+      
+      // Verifica se os dados são de fallback (IDs começam com 'fallback-')
+      const isFallback = response.data.some(item => item.idContratacao.startsWith('fallback-'));
+      
+      processarResposta(response, isFallback);
       if (filtros) {
         setFiltrosAtuais(filtros);
       }
@@ -54,6 +62,7 @@ export const useContratacoes = (): UseContratacoesReturn => {
       setContratacoes([]);
       setTotalRegistros(0);
       setTotalPaginas(0);
+      setUsandoFallback(false);
     } finally {
       setLoading(false);
     }
@@ -123,7 +132,9 @@ export const useContratacoes = (): UseContratacoesReturn => {
         response = await PNCPService.buscarContratacoesEmAberto(pagina, 20);
       }
 
-      processarResposta(response);
+      // Verifica se os dados são de fallback
+      const isFallback = response.data.some(item => item.idContratacao.startsWith('fallback-'));
+      processarResposta(response, isFallback);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar página';
       setError(errorMessage);
@@ -139,6 +150,7 @@ export const useContratacoes = (): UseContratacoesReturn => {
     setPaginaAtual(1);
     setError(null);
     setFiltrosAtuais({});
+    setUsandoFallback(false);
   }, []);
 
   // Carrega contratações em aberto ao inicializar
@@ -153,6 +165,7 @@ export const useContratacoes = (): UseContratacoesReturn => {
     totalRegistros,
     totalPaginas,
     paginaAtual,
+    usandoFallback,
     buscarPorTermo,
     buscarPorItem,
     buscarComFiltros,

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Filter, Search, AlertCircle, Loader2 } from 'lucide-react';
+import { Filter, Search, AlertCircle, Loader2, WifiOff } from 'lucide-react';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import ContratacaoCard from './components/ContratacaoCard';
@@ -20,6 +20,7 @@ function App() {
     totalRegistros,
     totalPaginas,
     paginaAtual,
+    usandoFallback,
     buscarPorTermo,
     buscarPorItem,
     buscarComFiltros,
@@ -73,6 +74,23 @@ function App() {
 
         {/* Conteúdo Principal */}
         <main className="flex-1">
+          {/* Notificação de Modo Offline */}
+          {usandoFallback && (
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <WifiOff className="h-5 w-5 text-yellow-400" />
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-yellow-700">
+                    <strong>Modo Offline:</strong> A API do PNCP está temporariamente indisponível. 
+                    Exibindo dados de demonstração. A funcionalidade completa será restaurada quando a API voltar ao normal.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Barra de Ações */}
           <div className="bg-white border-b border-gray-200 px-4 py-3">
             <div className="flex items-center justify-between">
