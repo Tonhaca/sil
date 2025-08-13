@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Filter, Calendar, MapPin, DollarSign, FileText, X } from 'lucide-react';
 import { FiltrosContratacao, ModalidadeContratacao, SituacaoContratacao } from '../types/pncp';
-import PNCPService from '../services/pncpApi';
+import { modalidadesContratacao, situacoesContratacao } from '../services/pncpApi';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -26,15 +26,11 @@ const Sidebar: React.FC<SidebarProps> = ({
   }, [filtrosAtuais]);
 
   useEffect(() => {
-    const carregarDados = async () => {
+    const carregarDados = () => {
       setLoading(true);
       try {
-        const [modalidadesData, situacoesData] = await Promise.all([
-          PNCPService.buscarModalidadesContratacao(),
-          PNCPService.buscarSituacoesContratacao()
-        ]);
-        setModalidades(modalidadesData);
-        setSituacoes(situacoesData);
+        setModalidades(modalidadesContratacao);
+        setSituacoes(situacoesContratacao);
       } catch (error) {
         console.error('Erro ao carregar dados dos filtros:', error);
       } finally {

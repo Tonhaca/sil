@@ -15,7 +15,7 @@ import {
   Award
 } from 'lucide-react';
 import { Contratacao } from '../types/pncp';
-import PNCPService from '../services/pncpApi';
+import { getRecebendoPropostaComFallback, getPublicadasComFallback } from '../services/pncpApi';
 
 interface ContratacaoDetalhesProps {
   idContratacao: string;
@@ -33,8 +33,33 @@ const ContratacaoDetalhes: React.FC<ContratacaoDetalhesProps> = ({ idContratacao
       setError(null);
       
       try {
-        const dados = await PNCPService.buscarContratacaoPorId(idContratacao);
-        setContratacao(dados);
+        // Buscar em licitações em aberto primeiro
+        const emAberto = await getRecebendoPropostaComFallback({
+          modalidade: 6,
+          pagina: 1,
+          tamanhoPagina: 500
+        });
+        
+        let dados = emAberto.conteudo?.find(c => c.idContratacao === idContratacao);
+        
+        // Se não encontrou, buscar em licitações publicadas
+        if (!dados) {
+          const hoje = new Date();
+          const dataInicial = `${hoje.getFullYear()}0101`;
+          const dataFinal = `${hoje.getFullYear()}${String(hoje.getMonth() + 1).padStart(2, '0')}${String(hoje.getDate()).padStart(2, '0')}`;
+          
+          const publicadas = await getPublicadasComFallback({
+            modalidade: 6,
+            dataInicial,
+            dataFinal,
+            pagina: 1,
+            tamanhoPagina: 500
+          });
+          
+          dados = publicadas.conteudo?.find(c => c.idContratacao === idContratacao);
+        }
+        
+        setContratacao(dados || null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Erro ao carregar detalhes');
       } finally {
