@@ -187,8 +187,8 @@ function App() {
                     <p className="text-gray-600">{formatarValor(licitacao.valorEstimado)}</p>
                   </div>
                   <div>
-                    <strong>Abertura:</strong>
-                    <p className="text-gray-600">{formatarData(licitacao.dataAberturaProposta)}</p>
+                    <strong>Divulgação PNCP:</strong>
+                    <p className="text-gray-600">{formatarData(licitacao.dataPublicacaoPncp)}</p>
                   </div>
                   <div>
                     <strong>Encerramento:</strong>

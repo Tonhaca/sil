@@ -24,6 +24,7 @@ export interface PNCPContratacao {
   objetoCompra: string;
   dataAberturaProposta: string;
   dataEncerramentoProposta: string;
+  dataPublicacaoPncp: string; // Data de divulgação no PNCP
   modalidadeNome: string;
   codigoModalidadeContratacao: number;
   valorEstimado: number;
@@ -57,6 +58,7 @@ function mapearContratacao(dados: any): PNCPContratacao {
     objetoCompra: dados.objetoCompra || '',
     dataAberturaProposta: dados.dataAberturaProposta || '',
     dataEncerramentoProposta: dados.dataEncerramentoProposta || '',
+    dataPublicacaoPncp: dados.dataPublicacaoPncp || '', // Data de divulgação no PNCP
     modalidadeNome: dados.modalidadeNome || '',
     codigoModalidadeContratacao: dados.modalidadeId || 0,
     valorEstimado: dados.valorTotalEstimado || 0,
@@ -102,9 +104,9 @@ export async function buscarLicitacoesEmAberto(params: {
     ? response.data.data.map(mapearContratacao)
     : [];
 
-  // Ordena por data de abertura (mais recentes primeiro)
+  // Ordena por data de divulgação no PNCP (mais recentes primeiro)
   const ordenadas = conteudo.sort((a: PNCPContratacao, b: PNCPContratacao) => 
-    new Date(b.dataAberturaProposta).getTime() - new Date(a.dataAberturaProposta).getTime()
+    new Date(b.dataPublicacaoPncp).getTime() - new Date(a.dataPublicacaoPncp).getTime()
   );
 
   return {
@@ -232,9 +234,9 @@ export async function buscarPorTermo(termo: string): Promise<PNCPContratacao[]> 
 
     console.log(`🎯 Licitações filtradas por "${termo}": ${filtradas.length}`);
 
-    // Ordena por data de abertura (mais recentes primeiro)
+    // Ordena por data de divulgação no PNCP (mais recentes primeiro)
     const ordenadas = filtradas.sort((a: PNCPContratacao, b: PNCPContratacao) => 
-      new Date(b.dataAberturaProposta).getTime() - new Date(a.dataAberturaProposta).getTime()
+      new Date(b.dataPublicacaoPncp).getTime() - new Date(a.dataPublicacaoPncp).getTime()
     );
 
     return ordenadas;
@@ -262,9 +264,9 @@ export async function buscarLicitacoesRecentes(): Promise<PNCPContratacao[]> {
       index === self.findIndex(l => l.numeroControlePNCP === licitacao.numeroControlePNCP)
     );
 
-    // Ordena por data de abertura (mais recentes primeiro)
+    // Ordena por data de divulgação no PNCP (mais recentes primeiro)
     const ordenadas = licitacoesUnicas.sort((a: PNCPContratacao, b: PNCPContratacao) => 
-      new Date(b.dataAberturaProposta).getTime() - new Date(a.dataAberturaProposta).getTime()
+      new Date(b.dataPublicacaoPncp).getTime() - new Date(a.dataPublicacaoPncp).getTime()
     );
 
     console.log(`🎯 Licitações recentes carregadas: ${ordenadas.length}`);
@@ -274,4 +276,3 @@ export async function buscarLicitacoesRecentes(): Promise<PNCPContratacao[]> {
     throw error;
   }
 }
-
