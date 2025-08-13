@@ -1,53 +1,28 @@
-import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { buscarPorTermo, buscarLicitacoesEmAberto, PNCPContratacao } from './services/pncpApi';
-import LicitacoesRecentes from './pages/LicitacoesRecentes';
+import React, { useState, useEffect } from 'react';
+import { buscarLicitacoesRecentes, PNCPContratacao } from '../services/pncpApi';
 
-function HomePage() {
-  const [termoBusca, setTermoBusca] = useState('');
+function LicitacoesRecentes() {
   const [licitacoes, setLicitacoes] = useState<PNCPContratacao[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const handleBuscar = async () => {
-    if (!termoBusca.trim()) {
-      setError('Digite um termo para buscar.');
-      return;
-    }
+  useEffect(() => {
+    carregarLicitacoesRecentes();
+  }, []);
 
+  const carregarLicitacoesRecentes = async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const resultados = await buscarPorTermo(termoBusca);
-      setLicitacoes(resultados);
+      const licitacoesRecentes = await buscarLicitacoesRecentes();
+      setLicitacoes(licitacoesRecentes);
     } catch (err) {
-      setError('Erro ao buscar licitações. Tente novamente.');
-      console.error('Erro na busca:', err);
+      setError('Erro ao carregar licitações recentes. Tente novamente.');
+      console.error('Erro ao carregar licitações recentes:', err);
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleBuscarEmAberto = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const resultados = await buscarLicitacoesEmAberto();
-      setLicitacoes(resultados.conteudo);
-    } catch (err) {
-      setError('Erro ao buscar licitações em aberto. Tente novamente.');
-      console.error('Erro na busca:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLimpar = () => {
-    setTermoBusca('');
-    setLicitacoes([]);
-    setError(null);
   };
 
   const formatarData = (data: string) => {
@@ -69,88 +44,70 @@ function HomePage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
-                🚀 SIL - Sistema Inteligente de Licitações
+                📋 Licitações Mais Recentes
               </h1>
               <p className="text-sm text-gray-600 mt-1">
-                Busque licitações públicas em todo o Brasil - Dados reais do PNCP
+                Licitações mais recentemente adicionadas ao PNCP
               </p>
             </div>
-            <Link
-              to="/licitacoes-recentes"
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+            <a
+              href="/"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
-              📋 Licitações Recentes
-            </Link>
+              ← Voltar à Busca
+            </a>
           </div>
         </div>
       </header>
 
-      {/* Busca */}
+      {/* Conteúdo */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Estatísticas */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <div className="flex gap-4">
-            <input
-              type="text"
-              value={termoBusca}
-              onChange={(e) => setTermoBusca(e.target.value)}
-              placeholder="Digite o item que deseja buscar (ex: equipamentos, serviços, mamadeira...)"
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              onKeyPress={(e) => e.key === 'Enter' && handleBuscar()}
-            />
-            <button
-              onClick={handleBuscar}
-              disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            >
-              {loading ? 'Buscando...' : 'Buscar'}
-            </button>
-            <button
-              onClick={handleBuscarEmAberto}
-              disabled={loading}
-              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-            >
-              Em Aberto
-            </button>
-            <button
-              onClick={handleLimpar}
-              disabled={loading}
-              className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50"
-            >
-              Limpar
-            </button>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">
+                Licitações em Aberto
+              </h2>
+              <p className="text-sm text-gray-600">
+                Todas as licitações estão "Recebendo Proposta"
+              </p>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-bold text-blue-600">
+                {licitacoes.length}
+              </div>
+              <div className="text-sm text-gray-500">
+                licitações encontradas
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Resultados */}
+        {/* Loading */}
+        {loading && (
+          <div className="text-center py-12">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <p className="mt-2 text-gray-600">
+              Carregando licitações mais recentes...
+            </p>
+          </div>
+        )}
+
+        {/* Erro */}
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
             {error}
           </div>
         )}
 
-        {loading && (
-          <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="mt-2 text-gray-600">Buscando licitações...</p>
-          </div>
-        )}
-
-        {!loading && licitacoes.length > 0 && (
+        {/* Lista de Licitações */}
+        {!loading && !error && licitacoes.length > 0 && (
           <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <h2 className="text-lg font-semibold text-gray-900">
-                {licitacoes.length} licitação{licitacoes.length !== 1 ? 'ões' : ''} encontrada{licitacoes.length !== 1 ? 's' : ''}
-                {termoBusca && ` para "${termoBusca}"`}
-              </h2>
-              <div className="text-sm text-gray-500">
-                Todas as licitações estão "Recebendo Proposta"
-              </div>
-            </div>
-
             {licitacoes.map((licitacao, index) => (
               <div key={index} className="bg-white rounded-lg shadow p-6">
                 <div className="flex justify-between items-start mb-4">
-                  <div>
+                  <div className="flex-1">
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">
                       {licitacao.numeroContratacao}
                     </h3>
@@ -158,7 +115,7 @@ function HomePage() {
                       <strong>Objeto:</strong> {licitacao.objetoCompra}
                     </p>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right ml-4">
                     <span className="inline-block bg-blue-100 text-blue-800 text-sm px-2 py-1 rounded">
                       {licitacao.modalidadeNome}
                     </span>
@@ -210,10 +167,11 @@ function HomePage() {
           </div>
         )}
 
-        {!loading && licitacoes.length === 0 && !error && (
+        {/* Sem resultados */}
+        {!loading && !error && licitacoes.length === 0 && (
           <div className="text-center py-12">
             <p className="text-gray-600">
-              {termoBusca ? 'Nenhuma licitação encontrada para este termo.' : 'Digite um termo para buscar licitações.'}
+              Nenhuma licitação encontrada.
             </p>
           </div>
         )}
@@ -222,15 +180,4 @@ function HomePage() {
   );
 }
 
-function App() {
-  return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/licitacoes-recentes" element={<LicitacoesRecentes />} />
-      </Routes>
-    </Router>
-  );
-}
-
-export default App;
+export default LicitacoesRecentes;
