@@ -67,19 +67,21 @@ app.get("/api/pncp/recebendo-proposta", async (req, res) => {
     };
 
     const first = await AXIOS.get("/v1/contratacoes/proposta", { params: baseParams }).then(r => r.data);
-    const results = Array.isArray(first?.conteudo) ? [...first.conteudo] : first?.data || [];
-    const totalPaginas =
-      first?.paginacao?.totalPaginas ??
-      first?.totalPaginas ??
-      1;
+    const results = Array.isArray(first?.data) ? [...first.data] : [];
+    const totalPaginas = first?.totalPaginas ?? 1;
 
     if (todasPaginas && pagina === 1 && totalPaginas > 1) {
       for (let p = 2; p <= totalPaginas; p++) {
-        const page = await AXIOS.get("/v1/contratacoes/proposta", {
-          params: { ...baseParams, pagina: p },
-        }).then(r => r.data);
-        const chunk = Array.isArray(page?.conteudo) ? page.conteudo : page?.data || [];
-        results.push(...chunk);
+        try {
+          const page = await AXIOS.get("/v1/contratacoes/proposta", {
+            params: { ...baseParams, pagina: p },
+          }).then(r => r.data);
+          const chunk = Array.isArray(page?.data) ? page.data : [];
+          results.push(...chunk);
+        } catch (pageError) {
+          console.warn(`⚠️ Erro ao buscar página ${p}:`, pageError?.response?.status || pageError?.message);
+          // Continua para a próxima página em vez de falhar completamente
+        }
       }
     }
 
@@ -87,7 +89,7 @@ app.get("/api/pncp/recebendo-proposta", async (req, res) => {
       paginacao: {
         paginaAtual: pagina,
         totalPaginas,
-        totalRegistros: first?.paginacao?.totalRegistros ?? first?.totalRegistros ?? results.length,
+        totalRegistros: first?.totalRegistros ?? results.length,
         tamanhoPagina,
       },
       conteudo: results,
@@ -127,19 +129,21 @@ app.get("/api/pncp/publicadas", async (req, res) => {
     };
 
     const first = await AXIOS.get("/v1/contratacoes/publicacao", { params: baseParams }).then(r => r.data);
-    const results = Array.isArray(first?.conteudo) ? [...first.conteudo] : first?.data || [];
-    const totalPaginas =
-      first?.paginacao?.totalPaginas ??
-      first?.totalPaginas ??
-      1;
+    const results = Array.isArray(first?.data) ? [...first.data] : [];
+    const totalPaginas = first?.totalPaginas ?? 1;
 
     if (todasPaginas && pagina === 1 && totalPaginas > 1) {
       for (let p = 2; p <= totalPaginas; p++) {
-        const page = await AXIOS.get("/v1/contratacoes/publicacao", {
-          params: { ...baseParams, pagina: p },
-        }).then(r => r.data);
-        const chunk = Array.isArray(page?.conteudo) ? page.conteudo : page?.data || [];
-        results.push(...chunk);
+        try {
+          const page = await AXIOS.get("/v1/contratacoes/publicacao", {
+            params: { ...baseParams, pagina: p },
+          }).then(r => r.data);
+          const chunk = Array.isArray(page?.data) ? page.data : [];
+          results.push(...chunk);
+        } catch (pageError) {
+          console.warn(`⚠️ Erro ao buscar página ${p}:`, pageError?.response?.status || pageError?.message);
+          // Continua para a próxima página em vez de falhar completamente
+        }
       }
     }
 
@@ -147,7 +151,7 @@ app.get("/api/pncp/publicadas", async (req, res) => {
       paginacao: {
         paginaAtual: pagina,
         totalPaginas,
-        totalRegistros: first?.paginacao?.totalRegistros ?? first?.totalRegistros ?? results.length,
+        totalRegistros: first?.totalRegistros ?? results.length,
         tamanhoPagina,
       },
       conteudo: results,
