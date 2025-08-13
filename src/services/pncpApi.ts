@@ -17,7 +17,7 @@ function formatDate(date: Date): string {
   return date.toISOString().slice(0, 10).replace(/-/g, '');
 }
 
-// Tipos para as respostas da API
+// Tipos para as respostas da API baseados na estrutura real
 export interface PNCPContratacao {
   numeroControlePNCP: string;
   numeroContratacao: string;
@@ -49,6 +49,30 @@ export interface PNCPResponse {
   };
 }
 
+// Função para mapear dados da API para nosso formato
+function mapearContratacao(dados: any): PNCPContratacao {
+  return {
+    numeroControlePNCP: dados.numeroControlePNCP || '',
+    numeroContratacao: dados.numeroCompra || '',
+    objetoCompra: dados.objetoCompra || '',
+    dataAberturaProposta: dados.dataAberturaProposta || '',
+    dataEncerramentoProposta: dados.dataEncerramentoProposta || '',
+    modalidadeNome: dados.modalidadeNome || '',
+    codigoModalidadeContratacao: dados.modalidadeId || 0,
+    valorEstimado: dados.valorTotalEstimado || 0,
+    unidadeGestora: {
+      codigo: dados.unidadeOrgao?.codigoUnidade || '',
+      nome: dados.unidadeOrgao?.nomeUnidade || dados.orgaoEntidade?.razaoSocial || '',
+      uf: dados.unidadeOrgao?.ufSigla || '',
+      municipio: dados.unidadeOrgao?.municipioNome || ''
+    },
+    situacaoContratacao: dados.situacaoCompraNome || '',
+    instrumentoConvocatorio: dados.tipoInstrumentoConvocatorioNome || '',
+    linkEdital: dados.linkSistemaOrigem || '',
+    linkSistema: dados.linkProcessoEletronico || ''
+  };
+}
+
 // Buscar licitações recebendo propostas (em aberto)
 export async function buscarLicitacoesEmAberto(params: {
   modalidade?: number;
@@ -60,8 +84,10 @@ export async function buscarLicitacoesEmAberto(params: {
     modalidade = 6, // Pregão Eletrônico por padrão
     dataFinal = formatDate(new Date()),
     pagina = 1,
-    tamanhoPagina = 500
+    tamanhoPagina = 50 // Reduzido para 50 para evitar problemas
   } = params;
+
+  console.log('🔍 Buscando licitações em aberto:', { modalidade, dataFinal, pagina, tamanhoPagina });
 
   const response = await pncpApi.get('/v1/contratacoes/proposta', {
     params: {
@@ -72,7 +98,22 @@ export async function buscarLicitacoesEmAberto(params: {
     }
   });
 
-  return response.data;
+  console.log('✅ Resposta da API:', response.data);
+
+  // Mapeia os dados para nosso formato
+  const conteudo = Array.isArray(response.data.data) 
+    ? response.data.data.map(mapearContratacao)
+    : [];
+
+  return {
+    conteudo,
+    paginacao: {
+      paginaAtual: response.data.numeroPagina || 1,
+      totalPaginas: response.data.totalPaginas || 1,
+      totalRegistros: response.data.totalRegistros || 0,
+      tamanhoPagina: tamanhoPagina
+    }
+  };
 }
 
 // Buscar licitações publicadas em período
@@ -88,7 +129,7 @@ export async function buscarLicitacoesPublicadas(params: {
     dataInicial,
     dataFinal,
     pagina = 1,
-    tamanhoPagina = 500
+    tamanhoPagina = 50
   } = params;
 
   const response = await pncpApi.get('/v1/contratacoes/publicacao', {
@@ -101,13 +142,26 @@ export async function buscarLicitacoesPublicadas(params: {
     }
   });
 
-  return response.data;
+  // Mapeia os dados para nosso formato
+  const conteudo = Array.isArray(response.data.data) 
+    ? response.data.data.map(mapearContratacao)
+    : [];
+
+  return {
+    conteudo,
+    paginacao: {
+      paginaAtual: response.data.numeroPagina || 1,
+      totalPaginas: response.data.totalPaginas || 1,
+      totalRegistros: response.data.totalRegistros || 0,
+      tamanhoPagina: tamanhoPagina
+    }
+  };
 }
 
 // Buscar todas as páginas de uma consulta
 export async function buscarTodasPaginas(
-  buscaFunction: () => Promise<PNCPResponse>,
-  maxPaginas: number = 10
+  buscaFunction: (pagina: number) => Promise<PNCPResponse>,
+  maxPaginas: number = 5
 ): Promise<PNCPContratacao[]> {
   const todasContratacoes: PNCPContratacao[] = [];
   let pagina = 1;
@@ -115,43 +169,87 @@ export async function buscarTodasPaginas(
 
   while (pagina <= totalPaginas && pagina <= maxPaginas) {
     try {
-      const response = await buscaFunction();
+      console.log(`📄 Buscando página ${pagina}...`);
+      const response = await buscaFunction(pagina);
       
       if (pagina === 1) {
         totalPaginas = response.paginacao.totalPaginas;
+        console.log(`📊 Total de páginas: ${totalPaginas}`);
       }
 
       todasContratacoes.push(...response.conteudo);
+      console.log(`✅ Página ${pagina}: ${response.conteudo.length} licitações`);
+      
       pagina++;
 
       // Pequena pausa para não sobrecarregar a API
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
     } catch (error) {
-      console.error(`Erro ao buscar página ${pagina}:`, error);
+      console.error(`❌ Erro ao buscar página ${pagina}:`, error);
       break;
     }
   }
 
+  console.log(`🎯 Total de licitações encontradas: ${todasContratacoes.length}`);
   return todasContratacoes;
 }
 
 // Buscar licitações que contenham um termo específico
 export async function buscarPorTermo(termo: string): Promise<PNCPContratacao[]> {
-  // Primeiro busca licitações em aberto
-  const emAberto = await buscarTodasPaginas(() => 
-    buscarLicitacoesEmAberto({ tamanhoPagina: 500 })
-  );
+  console.log(`🔍 Iniciando busca por: "${termo}"`);
+  
+  try {
+    // Busca licitações em aberto com múltiplas modalidades
+    const modalidades = [6, 4, 5, 8]; // Pregão Eletrônico, Concorrência, Dispensa
+    const todasLicitacoes: PNCPContratacao[] = [];
 
-  // Filtra por termo (busca ampla no objeto)
-  const filtradas = emAberto.filter(contratacao => 
-    contratacao.objetoCompra.toLowerCase().includes(termo.toLowerCase()) ||
-    contratacao.numeroContratacao.toLowerCase().includes(termo.toLowerCase()) ||
-    contratacao.unidadeGestora.nome.toLowerCase().includes(termo.toLowerCase())
-  );
+    for (const modalidade of modalidades) {
+      try {
+        const licitacoes = await buscarTodasPaginas((pagina) => 
+          buscarLicitacoesEmAberto({ 
+            modalidade, 
+            tamanhoPagina: 50,
+            pagina 
+          })
+        );
+        todasLicitacoes.push(...licitacoes);
+      } catch (error) {
+        console.warn(`⚠️ Erro ao buscar modalidade ${modalidade}:`, error);
+      }
+    }
 
-  // Ordena por data mais recente
-  return filtradas.sort((a, b) => 
-    new Date(b.dataAberturaProposta).getTime() - new Date(a.dataAberturaProposta).getTime()
-  );
+    console.log(`📊 Total de licitações antes do filtro: ${todasLicitacoes.length}`);
+
+    // Remove duplicatas baseado no numeroControlePNCP
+    const licitacoesUnicas = todasLicitacoes.filter((licitacao, index, self) => 
+      index === self.findIndex(l => l.numeroControlePNCP === licitacao.numeroControlePNCP)
+    );
+
+    console.log(`📊 Licitações únicas: ${licitacoesUnicas.length}`);
+
+    // Filtra por termo (busca ampla no objeto)
+    const filtradas = licitacoesUnicas.filter(contratacao => {
+      const termoLower = termo.toLowerCase();
+      const objetoLower = contratacao.objetoCompra.toLowerCase();
+      const numeroLower = contratacao.numeroContratacao.toLowerCase();
+      const orgaoLower = contratacao.unidadeGestora.nome.toLowerCase();
+      
+      return objetoLower.includes(termoLower) || 
+             numeroLower.includes(termoLower) || 
+             orgaoLower.includes(termoLower);
+    });
+
+    console.log(`🎯 Licitações filtradas por "${termo}": ${filtradas.length}`);
+
+    // Ordena por data mais recente
+    const ordenadas = filtradas.sort((a, b) => 
+      new Date(b.dataAberturaProposta).getTime() - new Date(a.dataAberturaProposta).getTime()
+    );
+
+    return ordenadas;
+  } catch (error) {
+    console.error('❌ Erro na busca por termo:', error);
+    throw error;
+  }
 }
 
