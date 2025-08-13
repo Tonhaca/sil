@@ -73,26 +73,20 @@ function mapearContratacao(dados: any): PNCPContratacao {
   };
 }
 
-// Buscar licitações recebendo propostas (em aberto)
+// Buscar licitações recebendo propostas (em aberto) - SEM filtros
 export async function buscarLicitacoesEmAberto(params: {
-  modalidade?: number;
-  dataFinal?: string;
   pagina?: number;
   tamanhoPagina?: number;
 } = {}): Promise<PNCPResponse> {
   const {
-    modalidade = 6, // Pregão Eletrônico por padrão
-    dataFinal = formatDate(new Date()),
     pagina = 1,
-    tamanhoPagina = 50 // Reduzido para 50 para evitar problemas
+    tamanhoPagina = 100 // Aumentado para pegar mais resultados
   } = params;
 
-  console.log('🔍 Buscando licitações em aberto:', { modalidade, dataFinal, pagina, tamanhoPagina });
+  console.log('🔍 Buscando licitações em aberto (sem filtros):', { pagina, tamanhoPagina });
 
   const response = await pncpApi.get('/v1/contratacoes/proposta', {
     params: {
-      dataFinal,
-      codigoModalidadeContratacao: modalidade,
       pagina,
       tamanhoPagina
     }
@@ -161,7 +155,7 @@ export async function buscarLicitacoesPublicadas(params: {
 // Buscar todas as páginas de uma consulta
 export async function buscarTodasPaginas(
   buscaFunction: (pagina: number) => Promise<PNCPResponse>,
-  maxPaginas: number = 5
+  maxPaginas: number = 10 // Aumentado para buscar mais páginas
 ): Promise<PNCPContratacao[]> {
   const todasContratacoes: PNCPContratacao[] = [];
   let pagina = 1;
@@ -183,7 +177,7 @@ export async function buscarTodasPaginas(
       pagina++;
 
       // Pequena pausa para não sobrecarregar a API
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 100));
     } catch (error) {
       console.error(`❌ Erro ao buscar página ${pagina}:`, error);
       break;
@@ -199,24 +193,13 @@ export async function buscarPorTermo(termo: string): Promise<PNCPContratacao[]> 
   console.log(`🔍 Iniciando busca por: "${termo}"`);
   
   try {
-    // Busca licitações em aberto com múltiplas modalidades
-    const modalidades = [6, 4, 5, 8]; // Pregão Eletrônico, Concorrência, Dispensa
-    const todasLicitacoes: PNCPContratacao[] = [];
-
-    for (const modalidade of modalidades) {
-      try {
-        const licitacoes = await buscarTodasPaginas((pagina) => 
-          buscarLicitacoesEmAberto({ 
-            modalidade, 
-            tamanhoPagina: 50,
-            pagina 
-          })
-        );
-        todasLicitacoes.push(...licitacoes);
-      } catch (error) {
-        console.warn(`⚠️ Erro ao buscar modalidade ${modalidade}:`, error);
-      }
-    }
+    // Busca TODAS as licitações em aberto (sem filtros de modalidade)
+    const todasLicitacoes = await buscarTodasPaginas((pagina) => 
+      buscarLicitacoesEmAberto({ 
+        tamanhoPagina: 100,
+        pagina 
+      })
+    );
 
     console.log(`📊 Total de licitações antes do filtro: ${todasLicitacoes.length}`);
 
@@ -249,6 +232,37 @@ export async function buscarPorTermo(termo: string): Promise<PNCPContratacao[]> 
     return ordenadas;
   } catch (error) {
     console.error('❌ Erro na busca por termo:', error);
+    throw error;
+  }
+}
+
+// Buscar licitações mais recentes (para carregamento inicial)
+export async function buscarLicitacoesRecentes(): Promise<PNCPContratacao[]> {
+  console.log('🚀 Carregando licitações mais recentes...');
+  
+  try {
+    // Busca as primeiras páginas de licitações em aberto
+    const licitacoes = await buscarTodasPaginas((pagina) => 
+      buscarLicitacoesEmAberto({ 
+        tamanhoPagina: 100,
+        pagina 
+      }), 5 // Busca 5 páginas para ter um bom volume inicial
+    );
+
+    // Remove duplicatas
+    const licitacoesUnicas = licitacoes.filter((licitacao, index, self) => 
+      index === self.findIndex(l => l.numeroControlePNCP === licitacao.numeroControlePNCP)
+    );
+
+    // Ordena por data mais recente
+    const ordenadas = licitacoesUnicas.sort((a, b) => 
+      new Date(b.dataAberturaProposta).getTime() - new Date(a.dataAberturaProposta).getTime()
+    );
+
+    console.log(`🎯 Licitações recentes carregadas: ${ordenadas.length}`);
+    return ordenadas;
+  } catch (error) {
+    console.error('❌ Erro ao carregar licitações recentes:', error);
     throw error;
   }
 }

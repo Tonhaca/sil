@@ -1,14 +1,39 @@
-import React, { useState } from 'react';
-import { buscarPorTermo, buscarLicitacoesEmAberto, PNCPContratacao } from './services/pncpApi';
+import React, { useState, useEffect } from 'react';
+import { buscarPorTermo, buscarLicitacoesEmAberto, buscarLicitacoesRecentes, PNCPContratacao } from './services/pncpApi';
 
 function App() {
   const [termoBusca, setTermoBusca] = useState('');
   const [licitacoes, setLicitacoes] = useState<PNCPContratacao[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [carregandoInicial, setCarregandoInicial] = useState(true);
+
+  // Carregar licitações recentes ao abrir a página
+  useEffect(() => {
+    carregarLicitacoesRecentes();
+  }, []);
+
+  const carregarLicitacoesRecentes = async () => {
+    setCarregandoInicial(true);
+    setError(null);
+
+    try {
+      const licitacoesRecentes = await buscarLicitacoesRecentes();
+      setLicitacoes(licitacoesRecentes);
+    } catch (err) {
+      setError('Erro ao carregar licitações recentes. Tente novamente.');
+      console.error('Erro ao carregar licitações recentes:', err);
+    } finally {
+      setCarregandoInicial(false);
+    }
+  };
 
   const handleBuscar = async () => {
-    if (!termoBusca.trim()) return;
+    if (!termoBusca.trim()) {
+      // Se não há termo, volta para licitações recentes
+      await carregarLicitacoesRecentes();
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -37,6 +62,11 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleLimpar = () => {
+    setTermoBusca('');
+    carregarLicitacoesRecentes();
   };
 
   const formatarData = (data: string) => {
@@ -78,17 +108,24 @@ function App() {
             />
             <button
               onClick={handleBuscar}
-              disabled={loading || !termoBusca.trim()}
+              disabled={loading || carregandoInicial}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
             >
               {loading ? 'Buscando...' : 'Buscar'}
             </button>
             <button
               onClick={handleBuscarEmAberto}
-              disabled={loading}
+              disabled={loading || carregandoInicial}
               className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
             >
               Em Aberto
+            </button>
+            <button
+              onClick={handleLimpar}
+              disabled={loading || carregandoInicial}
+              className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50"
+            >
+              Limpar
             </button>
           </div>
         </div>
@@ -100,19 +137,25 @@ function App() {
           </div>
         )}
 
-        {loading && (
+        {(loading || carregandoInicial) && (
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="mt-2 text-gray-600">Buscando licitações...</p>
+            <p className="mt-2 text-gray-600">
+              {carregandoInicial ? 'Carregando licitações recentes...' : 'Buscando licitações...'}
+            </p>
           </div>
         )}
 
-        {!loading && licitacoes.length > 0 && (
+        {!loading && !carregandoInicial && licitacoes.length > 0 && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <h2 className="text-lg font-semibold text-gray-900">
                 {licitacoes.length} licitação{licitacoes.length !== 1 ? 'ões' : ''} encontrada{licitacoes.length !== 1 ? 's' : ''}
+                {termoBusca && ` para "${termoBusca}"`}
               </h2>
+              <div className="text-sm text-gray-500">
+                Todas as licitações estão "Recebendo Proposta"
+              </div>
             </div>
 
             {licitacoes.map((licitacao, index) => (
@@ -178,10 +221,10 @@ function App() {
           </div>
         )}
 
-        {!loading && licitacoes.length === 0 && !error && (
+        {!loading && !carregandoInicial && licitacoes.length === 0 && !error && (
           <div className="text-center py-12">
             <p className="text-gray-600">
-              {termoBusca ? 'Nenhuma licitação encontrada para este termo.' : 'Digite um termo para buscar licitações.'}
+              {termoBusca ? 'Nenhuma licitação encontrada para este termo.' : 'Nenhuma licitação encontrada.'}
             </p>
           </div>
         )}
