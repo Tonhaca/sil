@@ -249,30 +249,54 @@ export async function buscarPorTermo(termo: string): Promise<PNCPContratacao[]> 
   }
 }
 
-// Buscar licitações mais recentes (para carregamento inicial)
+// Buscar licitações mais recentemente adicionadas ao PNCP
 export async function buscarLicitacoesRecentes(): Promise<PNCPContratacao[]> {
-  console.log('🚀 Carregando licitações mais recentes...');
+  console.log('🚀 Carregando licitações mais recentemente adicionadas ao PNCP...');
   
   try {
-    // Busca as primeiras páginas de licitações em aberto
-    const licitacoes = await buscarTodasPaginas((pagina) => 
-      buscarLicitacoesEmAberto({ 
-        tamanhoPagina: 50,
-        pagina 
-      }), 5 // Busca 5 páginas para ter um bom volume inicial
-    );
+    // Busca licitações publicadas nos últimos 30 dias para pegar as mais recentes
+    const dataFinal = formatDate(new Date());
+    const dataInicial = formatDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)); // 30 dias atrás
+    
+    console.log('📅 Buscando licitações publicadas entre:', { dataInicial, dataFinal });
 
-    // Remove duplicatas
-    const licitacoesUnicas = licitacoes.filter((licitacao, index, self) => 
+    // Busca em múltiplas modalidades para ter mais variedade
+    const modalidades = [6, 4, 5, 8]; // Pregão Eletrônico, Concorrência, Dispensa
+    const todasLicitacoes: PNCPContratacao[] = [];
+
+    for (const modalidade of modalidades) {
+      try {
+        const response = await pncpApi.get('/v1/contratacoes/publicacao', {
+          params: {
+            dataInicial,
+            dataFinal,
+            codigoModalidadeContratacao: modalidade,
+            pagina: 1,
+            tamanhoPagina: 50
+          }
+        });
+
+        if (Array.isArray(response.data.data)) {
+          const licitacoes = response.data.data.map(mapearContratacao);
+          todasLicitacoes.push(...licitacoes);
+          console.log(`✅ Modalidade ${modalidade}: ${licitacoes.length} licitações`);
+        }
+      } catch (error) {
+        console.warn(`⚠️ Erro ao buscar modalidade ${modalidade}:`, error);
+      }
+    }
+
+    // Remove duplicatas baseado no numeroControlePNCP
+    const licitacoesUnicas = todasLicitacoes.filter((licitacao, index, self) => 
       index === self.findIndex(l => l.numeroControlePNCP === licitacao.numeroControlePNCP)
     );
 
-    // Ordena por data de inclusão no PNCP (mais recentes primeiro)
+    // Ordena por data de inclusão (mais recentes primeiro)
     const ordenadas = licitacoesUnicas.sort((a: PNCPContratacao, b: PNCPContratacao) => 
       new Date(b.dataInclusao).getTime() - new Date(a.dataInclusao).getTime()
     );
 
-    console.log(`🎯 Licitações recentes carregadas: ${ordenadas.length}`);
+    console.log(`🎯 Licitações mais recentes carregadas: ${ordenadas.length}`);
     return ordenadas;
   } catch (error) {
     console.error('❌ Erro ao carregar licitações recentes:', error);
