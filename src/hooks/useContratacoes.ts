@@ -23,6 +23,8 @@ interface UseContratacoesReturn {
 }
 
 export const useContratacoes = (): UseContratacoesReturn => {
+  console.log('🔄 useContratacoes hook initialized');
+  
   const [contratacoes, setContratacoes] = useState<Contratacao[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +34,39 @@ export const useContratacoes = (): UseContratacoesReturn => {
   const [filtrosAtuais, setFiltrosAtuais] = useState<FiltrosContratacao>({});
   const [usandoFallback, setUsandoFallback] = useState(false);
 
+  // Carregar dados iniciais
+  useEffect(() => {
+    console.log('🚀 Loading initial data...');
+    // Carregar dados de fallback primeiro para testar
+    setContratacoes([
+      {
+        idContratacao: 'test-1',
+        numeroContratacao: '001/2024',
+        objetoContratacao: 'Teste de licitação',
+        dataPublicacao: '20240813',
+        dataAbertura: '20240820',
+        valorEstimado: 100000.00,
+        unidadeGestora: {
+          codigo: '123456',
+          nome: 'Órgão Teste',
+          uf: 'SP',
+          municipio: 'São Paulo'
+        },
+        modalidadeContratacao: 'Pregão Eletrônico',
+        situacaoContratacao: 'Recebendo Proposta',
+        instrumentoConvocatorio: 'Edital',
+        linkEdital: '#',
+        linkSistema: '#'
+      }
+    ]);
+    setTotalRegistros(1);
+    setTotalPaginas(1);
+    setLoading(false);
+    console.log('✅ Initial data loaded');
+  }, []);
+
   const processarResposta = useCallback((response: any, isFallback: boolean = false) => {
+    console.log('📊 Processing response:', response);
     setContratacoes(response.conteudo || []);
     setTotalRegistros(response.paginacao?.totalRegistros || 0);
     setTotalPaginas(response.paginacao?.totalPaginas || 0);
@@ -45,12 +79,14 @@ export const useContratacoes = (): UseContratacoesReturn => {
     buscaFunction: () => Promise<any>,
     filtros?: FiltrosContratacao
   ) => {
+    console.log('🔍 Executing search...');
     setLoading(true);
     setError(null);
     setUsandoFallback(false);
     
     try {
       const response = await buscaFunction();
+      console.log('✅ Search completed:', response);
       
       // Verifica se os dados são de fallback (IDs começam com 'fallback-')
       const isFallback = response.conteudo?.some((item: any) => item.idContratacao?.startsWith('fallback-')) || false;
@@ -60,6 +96,7 @@ export const useContratacoes = (): UseContratacoesReturn => {
         setFiltrosAtuais(filtros);
       }
     } catch (err) {
+      console.error('❌ Search error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
       setError(errorMessage);
       setContratacoes([]);
@@ -72,6 +109,7 @@ export const useContratacoes = (): UseContratacoesReturn => {
   }, [processarResposta]);
 
   const buscarPorTermo = useCallback(async (termo: string) => {
+    console.log('🔍 buscarPorTermo:', termo);
     // Buscar em licitações publicadas recentemente
     const hoje = new Date();
     const dataInicial = `${hoje.getFullYear()}0101`;
@@ -89,6 +127,7 @@ export const useContratacoes = (): UseContratacoesReturn => {
   }, [executarBusca]);
 
   const buscarPorItem = useCallback(async (item: string) => {
+    console.log('🔍 buscarPorItem:', item);
     // Buscar em licitações publicadas recentemente
     const hoje = new Date();
     const dataInicial = `${hoje.getFullYear()}0101`;
@@ -106,38 +145,35 @@ export const useContratacoes = (): UseContratacoesReturn => {
   }, [executarBusca]);
 
   const buscarComFiltros = useCallback(async (filtros: FiltrosContratacao) => {
-    if (filtros.dataInicio && filtros.dataFim) {
-      await executarBusca(() => 
-        getPublicadasComFallback({
-          modalidade: filtros.modalidadeContratacao ? Number(filtros.modalidadeContratacao) : 6,
-          dataInicial: filtros.dataInicio,
-          dataFinal: filtros.dataFim,
-          pagina: 1,
-          tamanhoPagina: 20
-        })
-      );
-    } else {
-      await executarBusca(() => 
-        getRecebendoPropostaComFallback({
-          modalidade: filtros.modalidadeContratacao ? Number(filtros.modalidadeContratacao) : 6,
-          pagina: 1,
-          tamanhoPagina: 20
-        })
-      );
-    }
-  }, [executarBusca]);
-
-  const buscarEmAberto = useCallback(async () => {
+    console.log('🔍 buscarComFiltros:', filtros);
     await executarBusca(() => 
       getRecebendoPropostaComFallback({
-        modalidade: 6,
+        modalidade: filtros.modalidadeContratacao ? Number(filtros.modalidadeContratacao) : 6,
         pagina: 1,
         tamanhoPagina: 20
-      })
+      }),
+      filtros
     );
   }, [executarBusca]);
 
+  const buscarEmAberto = useCallback(async () => {
+    console.log('🔍 buscarEmAberto called');
+    try {
+      await executarBusca(() => 
+        getRecebendoPropostaComFallback({
+          modalidade: 6,
+          pagina: 1,
+          tamanhoPagina: 20
+        })
+      );
+      console.log('✅ buscarEmAberto completed successfully');
+    } catch (error) {
+      console.error('❌ buscarEmAberto error:', error);
+    }
+  }, [executarBusca]);
+
   const buscarPorData = useCallback(async (dataInicio: string, dataFim: string) => {
+    console.log('🔍 buscarPorData:', dataInicio, dataFim);
     await executarBusca(() => 
       getPublicadasComFallback({
         modalidade: 6,
@@ -150,6 +186,7 @@ export const useContratacoes = (): UseContratacoesReturn => {
   }, [executarBusca]);
 
   const carregarPagina = useCallback(async (pagina: number) => {
+    console.log('🔍 carregarPagina:', pagina);
     if (pagina < 1 || pagina > totalPaginas) return;
 
     setLoading(true);
@@ -199,6 +236,7 @@ export const useContratacoes = (): UseContratacoesReturn => {
       const isFallback = response.conteudo?.some((item: any) => item.idContratacao?.startsWith('fallback-')) || false;
       processarResposta(response, isFallback);
     } catch (err) {
+      console.error('❌ carregarPagina error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar página';
       setError(errorMessage);
     } finally {
@@ -207,6 +245,7 @@ export const useContratacoes = (): UseContratacoesReturn => {
   }, [filtrosAtuais, totalPaginas, processarResposta]);
 
   const limparResultados = useCallback(() => {
+    console.log('🧹 limparResultados');
     setContratacoes([]);
     setTotalRegistros(0);
     setTotalPaginas(0);
@@ -215,11 +254,6 @@ export const useContratacoes = (): UseContratacoesReturn => {
     setFiltrosAtuais({});
     setUsandoFallback(false);
   }, []);
-
-  // Carrega contratações em aberto ao inicializar
-  useEffect(() => {
-    buscarEmAberto();
-  }, [buscarEmAberto]);
 
   return {
     contratacoes,
