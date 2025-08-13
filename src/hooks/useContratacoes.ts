@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Contratacao, FiltrosContratacao, PNCPResponse } from '../types/pncp';
-import PNCPService from '../services/pncpApi';
+import { Contratacao, FiltrosContratacao } from '../types/pncp';
+import { 
+  getRecebendoPropostaComFallback, 
+  getPublicadasComFallback 
+} from '../services/pncpApi';
 
 interface UseContratacoesReturn {
   contratacoes: Contratacao[];
@@ -29,17 +32,17 @@ export const useContratacoes = (): UseContratacoesReturn => {
   const [filtrosAtuais, setFiltrosAtuais] = useState<FiltrosContratacao>({});
   const [usandoFallback, setUsandoFallback] = useState(false);
 
-  const processarResposta = useCallback((response: PNCPResponse<Contratacao>, isFallback: boolean = false) => {
-    setContratacoes(response.data);
-    setTotalRegistros(response.totalRegistros);
-    setTotalPaginas(response.totalPaginas);
-    setPaginaAtual(response.paginaAtual);
+  const processarResposta = useCallback((response: any, isFallback: boolean = false) => {
+    setContratacoes(response.conteudo || []);
+    setTotalRegistros(response.paginacao?.totalRegistros || 0);
+    setTotalPaginas(response.paginacao?.totalPaginas || 0);
+    setPaginaAtual(response.paginacao?.paginaAtual || 1);
     setError(null);
     setUsandoFallback(isFallback);
   }, []);
 
   const executarBusca = useCallback(async (
-    buscaFunction: () => Promise<PNCPResponse<Contratacao>>,
+    buscaFunction: () => Promise<any>,
     filtros?: FiltrosContratacao
   ) => {
     setLoading(true);
@@ -50,7 +53,7 @@ export const useContratacoes = (): UseContratacoesReturn => {
       const response = await buscaFunction();
       
       // Verifica se os dados são de fallback (IDs começam com 'fallback-')
-      const isFallback = response.data.some(item => item.idContratacao.startsWith('fallback-'));
+      const isFallback = response.conteudo?.some((item: any) => item.idContratacao?.startsWith('fallback-')) || false;
       
       processarResposta(response, isFallback);
       if (filtros) {
@@ -69,32 +72,80 @@ export const useContratacoes = (): UseContratacoesReturn => {
   }, [processarResposta]);
 
   const buscarPorTermo = useCallback(async (termo: string) => {
+    // Buscar em licitações publicadas recentemente
+    const hoje = new Date();
+    const dataInicial = `${hoje.getFullYear()}0101`;
+    const dataFinal = `${hoje.getFullYear()}${String(hoje.getMonth() + 1).padStart(2, '0')}${String(hoje.getDate()).padStart(2, '0')}`;
+    
     await executarBusca(() => 
-      PNCPService.buscarContratacoesPorTermo(termo, 1, 20)
+      getPublicadasComFallback({
+        modalidade: 6,
+        dataInicial,
+        dataFinal,
+        pagina: 1,
+        tamanhoPagina: 500
+      })
     );
   }, [executarBusca]);
 
   const buscarPorItem = useCallback(async (item: string) => {
+    // Buscar em licitações publicadas recentemente
+    const hoje = new Date();
+    const dataInicial = `${hoje.getFullYear()}0101`;
+    const dataFinal = `${hoje.getFullYear()}${String(hoje.getMonth() + 1).padStart(2, '0')}${String(hoje.getDate()).padStart(2, '0')}`;
+    
     await executarBusca(() => 
-      PNCPService.buscarContratacoesPorItem(item, 1, 20)
+      getPublicadasComFallback({
+        modalidade: 6,
+        dataInicial,
+        dataFinal,
+        pagina: 1,
+        tamanhoPagina: 500
+      })
     );
   }, [executarBusca]);
 
   const buscarComFiltros = useCallback(async (filtros: FiltrosContratacao) => {
-    await executarBusca(() => 
-      PNCPService.buscarContratacoesComFiltros({ ...filtros, pagina: 1, tamanhoPagina: 20 })
-    );
+    if (filtros.dataInicio && filtros.dataFim) {
+      await executarBusca(() => 
+        getPublicadasComFallback({
+          modalidade: filtros.modalidadeContratacao ? Number(filtros.modalidadeContratacao) : 6,
+          dataInicial: filtros.dataInicio,
+          dataFinal: filtros.dataFim,
+          pagina: 1,
+          tamanhoPagina: 20
+        })
+      );
+    } else {
+      await executarBusca(() => 
+        getRecebendoPropostaComFallback({
+          modalidade: filtros.modalidadeContratacao ? Number(filtros.modalidadeContratacao) : 6,
+          pagina: 1,
+          tamanhoPagina: 20
+        })
+      );
+    }
   }, [executarBusca]);
 
   const buscarEmAberto = useCallback(async () => {
     await executarBusca(() => 
-      PNCPService.buscarContratacoesEmAberto(1, 20)
+      getRecebendoPropostaComFallback({
+        modalidade: 6,
+        pagina: 1,
+        tamanhoPagina: 20
+      })
     );
   }, [executarBusca]);
 
   const buscarPorData = useCallback(async (dataInicio: string, dataFim: string) => {
     await executarBusca(() => 
-      PNCPService.buscarContratacoesPorData(dataInicio, dataFim, 1, 20)
+      getPublicadasComFallback({
+        modalidade: 6,
+        dataInicial: dataInicio,
+        dataFinal: dataFim,
+        pagina: 1,
+        tamanhoPagina: 20
+      })
     );
   }, [executarBusca]);
 
@@ -105,35 +156,47 @@ export const useContratacoes = (): UseContratacoesReturn => {
     setError(null);
 
     try {
-      let response: PNCPResponse<Contratacao>;
+      let response: any;
 
       // Determina qual tipo de busca fazer baseado nos filtros atuais
       if (filtrosAtuais.termo) {
-        response = await PNCPService.buscarContratacoesPorTermo(
-          filtrosAtuais.termo, 
-          pagina, 
-          20
-        );
-      } else if (filtrosAtuais.dataInicio && filtrosAtuais.dataFim) {
-        response = await PNCPService.buscarContratacoesPorData(
-          filtrosAtuais.dataInicio,
-          filtrosAtuais.dataFim,
+        // Buscar em licitações publicadas recentemente
+        const hoje = new Date();
+        const dataInicial = `${hoje.getFullYear()}0101`;
+        const dataFinal = `${hoje.getFullYear()}${String(hoje.getMonth() + 1).padStart(2, '0')}${String(hoje.getDate()).padStart(2, '0')}`;
+        
+        response = await getPublicadasComFallback({
+          modalidade: 6,
+          dataInicial,
+          dataFinal,
           pagina,
-          20
-        );
+          tamanhoPagina: 500
+        });
+      } else if (filtrosAtuais.dataInicio && filtrosAtuais.dataFim) {
+        response = await getPublicadasComFallback({
+          modalidade: filtrosAtuais.modalidadeContratacao ? Number(filtrosAtuais.modalidadeContratacao) : 6,
+          dataInicial: filtrosAtuais.dataInicio,
+          dataFinal: filtrosAtuais.dataFim,
+          pagina,
+          tamanhoPagina: 20
+        });
       } else if (Object.keys(filtrosAtuais).length > 0) {
-        response = await PNCPService.buscarContratacoesComFiltros({
-          ...filtrosAtuais,
+        response = await getRecebendoPropostaComFallback({
+          modalidade: filtrosAtuais.modalidadeContratacao ? Number(filtrosAtuais.modalidadeContratacao) : 6,
           pagina,
           tamanhoPagina: 20
         });
       } else {
         // Busca padrão em aberto
-        response = await PNCPService.buscarContratacoesEmAberto(pagina, 20);
+        response = await getRecebendoPropostaComFallback({
+          modalidade: 6,
+          pagina,
+          tamanhoPagina: 20
+        });
       }
 
       // Verifica se os dados são de fallback
-      const isFallback = response.data.some(item => item.idContratacao.startsWith('fallback-'));
+      const isFallback = response.conteudo?.some((item: any) => item.idContratacao?.startsWith('fallback-')) || false;
       processarResposta(response, isFallback);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar página';
