@@ -85,13 +85,14 @@ export async function buscarLicitacoesEmAberto(params: {
     tamanhoPagina = 50 // Mínimo 10, usando 50 para pegar mais resultados
   } = params;
 
-  const dataFinal = formatDate(new Date()); // Data de hoje
+  // Usa uma data bem futura para pegar todas as licitações em aberto
+  const dataFinal = '20301231'; // 31/12/2030
 
   console.log('🔍 Buscando licitações em aberto (sem filtros):', { dataFinal, pagina, tamanhoPagina });
 
   const response = await pncpApi.get('/v1/contratacoes/proposta', {
     params: {
-      dataFinal, // Parâmetro obrigatório - data até quando ainda recebe propostas
+      dataFinal, // Data futura para pegar todas as licitações em aberto
       pagina,
       tamanhoPagina
     }
