@@ -1,148 +1,157 @@
 // src/services/pncpApi.ts
-import axios from "axios";
+import axios from 'axios';
 
-const api = axios.create({ baseURL: "/api" });
+const PNCP_BASE = 'https://pncp.gov.br/api/consulta';
 
-// Licitações com recebimento de proposta em aberto
-export async function getRecebendoProposta(params: {
-  modalidade?: number;          // default 6
-  dataFinal?: string;           // AAAAMMDD; default hoje
-  pagina?: number;              // default 1
-  tamanhoPagina?: number;       // default 500
-  todasPaginas?: boolean;       // default true
-} = {}) {
-  const { data } = await api.get("/pncp/recebendo-proposta", { params });
-  return data;
+// Configuração do axios para PNCP
+const pncpApi = axios.create({
+  baseURL: PNCP_BASE,
+  timeout: 30000,
+  headers: {
+    'accept': '*/*'
+  }
+});
+
+// Função para formatar data para AAAAMMDD
+function formatDate(date: Date): string {
+  return date.toISOString().slice(0, 10).replace(/-/g, '');
 }
 
-// Licitações publicadas em período
-export async function getPublicadas(params: {
-  modalidade: number;           // obrigatório
-  dataInicial: string;          // AAAAMMDD
-  dataFinal: string;            // AAAAMMDD
+// Tipos para as respostas da API
+export interface PNCPContratacao {
+  numeroControlePNCP: string;
+  numeroContratacao: string;
+  objetoCompra: string;
+  dataAberturaProposta: string;
+  dataEncerramentoProposta: string;
+  modalidadeNome: string;
+  codigoModalidadeContratacao: number;
+  valorEstimado: number;
+  unidadeGestora: {
+    codigo: string;
+    nome: string;
+    uf: string;
+    municipio: string;
+  };
+  situacaoContratacao: string;
+  instrumentoConvocatorio: string;
+  linkEdital?: string;
+  linkSistema?: string;
+}
+
+export interface PNCPResponse {
+  conteudo: PNCPContratacao[];
+  paginacao: {
+    paginaAtual: number;
+    totalPaginas: number;
+    totalRegistros: number;
+    tamanhoPagina: number;
+  };
+}
+
+// Buscar licitações recebendo propostas (em aberto)
+export async function buscarLicitacoesEmAberto(params: {
+  modalidade?: number;
+  dataFinal?: string;
   pagina?: number;
   tamanhoPagina?: number;
-  todasPaginas?: boolean;       // default true
-}) {
-  const { data } = await api.get("/pncp/publicadas", { params });
-  return data;
-}
+} = {}): Promise<PNCPResponse> {
+  const {
+    modalidade = 6, // Pregão Eletrônico por padrão
+    dataFinal = formatDate(new Date()),
+    pagina = 1,
+    tamanhoPagina = 500
+  } = params;
 
-// Dados de fallback para quando a API do PNCP está indisponível
-const dadosFallback = {
-  paginacao: {
-    paginaAtual: 1,
-    totalPaginas: 1,
-    totalRegistros: 3,
-    tamanhoPagina: 3
-  },
-  conteudo: [
-    {
-      idContratacao: 'fallback-1',
-      numeroContratacao: '001/2024',
-      objetoContratacao: 'Aquisição de equipamentos de informática para secretaria municipal',
-      dataPublicacao: '20240813',
-      dataAbertura: '20240820',
-      valorEstimado: 150000.00,
-      unidadeGestora: {
-        codigo: '123456',
-        nome: 'Prefeitura Municipal de São Paulo',
-        uf: 'SP',
-        municipio: 'São Paulo'
-      },
-      modalidadeContratacao: 'Pregão Eletrônico',
-      situacaoContratacao: 'Recebendo Proposta',
-      instrumentoConvocatorio: 'Edital',
-      linkEdital: 'https://exemplo.com/edital1',
-      linkSistema: 'https://exemplo.com/sistema1'
-    },
-    {
-      idContratacao: 'fallback-2',
-      numeroContratacao: '002/2024',
-      objetoContratacao: 'Serviços de limpeza e conservação de prédios públicos',
-      dataPublicacao: '20240810',
-      dataAbertura: '20240825',
-      valorEstimado: 85000.00,
-      unidadeGestora: {
-        codigo: '789012',
-        nome: 'Secretaria de Administração do Estado',
-        uf: 'RJ',
-        municipio: 'Rio de Janeiro'
-      },
-      modalidadeContratacao: 'Concorrência',
-      situacaoContratacao: 'Recebendo Proposta',
-      instrumentoConvocatorio: 'Edital',
-      linkEdital: 'https://exemplo.com/edital2',
-      linkSistema: 'https://exemplo.com/sistema2'
-    },
-    {
-      idContratacao: 'fallback-3',
-      numeroContratacao: '003/2024',
-      objetoContratacao: 'Fornecimento de material de escritório para órgãos federais',
-      dataPublicacao: '20240808',
-      dataAbertura: '20240822',
-      valorEstimado: 45000.00,
-      unidadeGestora: {
-        codigo: '345678',
-        nome: 'Ministério da Economia',
-        uf: 'DF',
-        municipio: 'Brasília'
-      },
-      modalidadeContratacao: 'Pregão Eletrônico',
-      situacaoContratacao: 'Recebendo Proposta',
-      instrumentoConvocatorio: 'Edital',
-      linkEdital: 'https://exemplo.com/edital3',
-      linkSistema: 'https://exemplo.com/sistema3'
+  const response = await pncpApi.get('/v1/contratacoes/proposta', {
+    params: {
+      dataFinal,
+      codigoModalidadeContratacao: modalidade,
+      pagina,
+      tamanhoPagina
     }
-  ]
-};
+  });
 
-// Versões com fallback para compatibilidade
-export async function getRecebendoPropostaComFallback(params = {}) {
-  try {
-    return await getRecebendoProposta(params);
-  } catch (error) {
-    console.warn('Erro ao buscar licitações em aberto, usando dados de fallback:', error);
-    return dadosFallback;
-  }
+  return response.data;
 }
 
-export async function getPublicadasComFallback(params: {
+// Buscar licitações publicadas em período
+export async function buscarLicitacoesPublicadas(params: {
   modalidade: number;
   dataInicial: string;
   dataFinal: string;
   pagina?: number;
   tamanhoPagina?: number;
-  todasPaginas?: boolean;
-}) {
-  try {
-    return await getPublicadas(params);
-  } catch (error) {
-    console.warn('Erro ao buscar licitações publicadas, usando dados de fallback:', error);
-    return dadosFallback;
-  }
+}): Promise<PNCPResponse> {
+  const {
+    modalidade,
+    dataInicial,
+    dataFinal,
+    pagina = 1,
+    tamanhoPagina = 500
+  } = params;
+
+  const response = await pncpApi.get('/v1/contratacoes/publicacao', {
+    params: {
+      codigoModalidadeContratacao: modalidade,
+      dataInicial,
+      dataFinal,
+      pagina,
+      tamanhoPagina
+    }
+  });
+
+  return response.data;
 }
 
-// Listas estáticas para compatibilidade
-export const modalidadesContratacao = [
-  { codigo: 6, nome: 'Pregão Eletrônico' },
-  { codigo: 4, nome: 'Concorrência Eletrônica' },
-  { codigo: 5, nome: 'Concorrência Presencial' },
-  { codigo: 8, nome: 'Dispensa' },
-  { codigo: 9, nome: 'Inexigibilidade' }
-];
+// Buscar todas as páginas de uma consulta
+export async function buscarTodasPaginas(
+  buscaFunction: () => Promise<PNCPResponse>,
+  maxPaginas: number = 10
+): Promise<PNCPContratacao[]> {
+  const todasContratacoes: PNCPContratacao[] = [];
+  let pagina = 1;
+  let totalPaginas = 1;
 
-export const situacoesContratacao = [
-  { codigo: 'recebendo-proposta', nome: 'Recebendo Proposta' },
-  { codigo: 'homologada', nome: 'Homologada' },
-  { codigo: 'suspensa', nome: 'Suspensa' },
-  { codigo: 'revogada', nome: 'Revogada' },
-  { codigo: 'anulada', nome: 'Anulada' }
-];
+  while (pagina <= totalPaginas && pagina <= maxPaginas) {
+    try {
+      const response = await buscaFunction();
+      
+      if (pagina === 1) {
+        totalPaginas = response.paginacao.totalPaginas;
+      }
 
-export const instrumentosConvocatorios = [
-  { codigo: 'edital', nome: 'Edital' },
-  { codigo: 'aviso', nome: 'Aviso' },
-  { codigo: 'convocacao', nome: 'Convocação' }
-];
+      todasContratacoes.push(...response.conteudo);
+      pagina++;
+
+      // Pequena pausa para não sobrecarregar a API
+      await new Promise(resolve => setTimeout(resolve, 100));
+    } catch (error) {
+      console.error(`Erro ao buscar página ${pagina}:`, error);
+      break;
+    }
+  }
+
+  return todasContratacoes;
+}
+
+// Buscar licitações que contenham um termo específico
+export async function buscarPorTermo(termo: string): Promise<PNCPContratacao[]> {
+  // Primeiro busca licitações em aberto
+  const emAberto = await buscarTodasPaginas(() => 
+    buscarLicitacoesEmAberto({ tamanhoPagina: 500 })
+  );
+
+  // Filtra por termo (busca ampla no objeto)
+  const filtradas = emAberto.filter(contratacao => 
+    contratacao.objetoCompra.toLowerCase().includes(termo.toLowerCase()) ||
+    contratacao.numeroContratacao.toLowerCase().includes(termo.toLowerCase()) ||
+    contratacao.unidadeGestora.nome.toLowerCase().includes(termo.toLowerCase())
+  );
+
+  // Ordena por data mais recente
+  return filtradas.sort((a, b) => 
+    new Date(b.dataAberturaProposta).getTime() - new Date(a.dataAberturaProposta).getTime()
+  );
+}
 
