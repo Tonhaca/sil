@@ -89,7 +89,7 @@ export async function buscarLicitacoesEmAberto(params: {
 
   const response = await pncpApi.get('/v1/contratacoes/proposta', {
     params: {
-      dataFinal, // Parâmetro obrigatório
+      dataFinal, // Parâmetro obrigatório - data até quando ainda recebe propostas
       pagina,
       tamanhoPagina
     }
@@ -102,8 +102,13 @@ export async function buscarLicitacoesEmAberto(params: {
     ? response.data.data.map(mapearContratacao)
     : [];
 
+  // Ordena por data de abertura (mais recentes primeiro)
+  const ordenadas = conteudo.sort((a: PNCPContratacao, b: PNCPContratacao) => 
+    new Date(b.dataAberturaProposta).getTime() - new Date(a.dataAberturaProposta).getTime()
+  );
+
   return {
-    conteudo,
+    conteudo: ordenadas,
     paginacao: {
       paginaAtual: response.data.numeroPagina || 1,
       totalPaginas: response.data.totalPaginas || 1,
@@ -199,7 +204,7 @@ export async function buscarPorTermo(termo: string): Promise<PNCPContratacao[]> 
     // Busca TODAS as licitações em aberto (sem filtros de modalidade)
     const todasLicitacoes = await buscarTodasPaginas((pagina) => 
       buscarLicitacoesEmAberto({ 
-        tamanhoPagina: 100,
+        tamanhoPagina: 50,
         pagina 
       })
     );
@@ -227,8 +232,8 @@ export async function buscarPorTermo(termo: string): Promise<PNCPContratacao[]> 
 
     console.log(`🎯 Licitações filtradas por "${termo}": ${filtradas.length}`);
 
-    // Ordena por data mais recente
-    const ordenadas = filtradas.sort((a, b) => 
+    // Ordena por data de abertura (mais recentes primeiro)
+    const ordenadas = filtradas.sort((a: PNCPContratacao, b: PNCPContratacao) => 
       new Date(b.dataAberturaProposta).getTime() - new Date(a.dataAberturaProposta).getTime()
     );
 
@@ -247,7 +252,7 @@ export async function buscarLicitacoesRecentes(): Promise<PNCPContratacao[]> {
     // Busca as primeiras páginas de licitações em aberto
     const licitacoes = await buscarTodasPaginas((pagina) => 
       buscarLicitacoesEmAberto({ 
-        tamanhoPagina: 100,
+        tamanhoPagina: 50,
         pagina 
       }), 5 // Busca 5 páginas para ter um bom volume inicial
     );
@@ -257,8 +262,8 @@ export async function buscarLicitacoesRecentes(): Promise<PNCPContratacao[]> {
       index === self.findIndex(l => l.numeroControlePNCP === licitacao.numeroControlePNCP)
     );
 
-    // Ordena por data mais recente
-    const ordenadas = licitacoesUnicas.sort((a, b) => 
+    // Ordena por data de abertura (mais recentes primeiro)
+    const ordenadas = licitacoesUnicas.sort((a: PNCPContratacao, b: PNCPContratacao) => 
       new Date(b.dataAberturaProposta).getTime() - new Date(a.dataAberturaProposta).getTime()
     );
 
