@@ -1,60 +1,191 @@
-import express from 'express';
+// server.ts – Express + rotas que chamam PNCP no backend
+// Produção: serve a pasta 'dist' (Vite build) + API
+// Dev: rode `npm run dev` para Vite e este servidor em paralelo
+
+import express from "express";
+import axios from "axios";
+import cors from "cors";
+import compression from "compression";
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { createServer as createViteServer } from 'vite';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-// Middleware para parsing de JSON
 app.use(express.json());
+app.use(compression());
 
-// Middleware para CORS
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  
-  if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
-  } else {
-    next();
+// Em dev, liberar CORS para o Vite (5173). Em prod, ajuste a origin.
+app.use(cors({ origin: true }));
+
+const PNCP_BASE = "https://pncp.gov.br/api/consulta"; // base oficial
+const AXIOS = axios.create({
+  baseURL: PNCP_BASE,
+  timeout: 30000,
+  headers: { accept: "*/*" },
+});
+
+// util: validar AAAAMMDD
+function isYYYYMMDD(v: string): boolean {
+  return /^[0-9]{8}$/.test(v);
+}
+
+// GET /api/health
+app.get("/api/health", (_req, res) => res.json({ ok: true, ts: new Date().toISOString() }));
+
+// GET /api/pncp/recebendo-proposta
+// Params: modalidade(=6 default), dataFinal(AAAAMMDD default hoje), pagina(1), tamanhoPagina(500),
+//         todasPaginas(true para agregar tudo)
+app.get("/api/pncp/recebendo-proposta", async (req, res) => {
+  try {
+    const modalidade = Number(req.query.modalidade ?? 6);
+    const todasPaginas = String(req.query.todasPaginas ?? "true") === "true";
+    const pagina = Number(req.query.pagina ?? 1);
+    const tamanhoPagina = Math.max(Math.min(Number(req.query.tamanhoPagina ?? 500), 500), 10);
+
+    const today = new Date();
+    const dataFinal =
+      typeof req.query.dataFinal === "string" && isYYYYMMDD(req.query.dataFinal)
+        ? req.query.dataFinal
+        : `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(
+            today.getDate()
+          ).padStart(2, "0")}`;
+
+    if (!modalidade || !Number.isInteger(modalidade)) {
+      return res.status(400).json({ error: "modalidade inválida" });
+    }
+    if (!isYYYYMMDD(dataFinal)) {
+      return res.status(400).json({ error: "dataFinal deve ser AAAAMMDD" });
+    }
+
+    const baseParams = {
+      dataFinal,
+      codigoModalidadeContratacao: modalidade,
+      pagina,
+      tamanhoPagina,
+    };
+
+    const first = await AXIOS.get("/v1/contratacoes/proposta", { params: baseParams }).then(r => r.data);
+    const results = Array.isArray(first?.conteudo) ? [...first.conteudo] : first?.data || [];
+    const totalPaginas =
+      first?.paginacao?.totalPaginas ??
+      first?.totalPaginas ??
+      1;
+
+    if (todasPaginas && pagina === 1 && totalPaginas > 1) {
+      for (let p = 2; p <= totalPaginas; p++) {
+        const page = await AXIOS.get("/v1/contratacoes/proposta", {
+          params: { ...baseParams, pagina: p },
+        }).then(r => r.data);
+        const chunk = Array.isArray(page?.conteudo) ? page.conteudo : page?.data || [];
+        results.push(...chunk);
+      }
+    }
+
+    return res.json({
+      paginacao: {
+        paginaAtual: pagina,
+        totalPaginas,
+        totalRegistros: first?.paginacao?.totalRegistros ?? first?.totalRegistros ?? results.length,
+        tamanhoPagina,
+      },
+      conteudo: results,
+    });
+  } catch (err: any) {
+    console.error("ERRO /recebendo-proposta:", err?.response?.status, err?.response?.data || err.message);
+    const status = err?.response?.status || 502;
+    return res.status(status).json({ error: "Falha ao consultar PNCP /proposta", detail: err?.message });
   }
 });
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
-  });
+// GET /api/pncp/publicadas
+// Params: modalidade (obrigatório), dataInicial(AAAAMMDD), dataFinal(AAAAMMDD),
+//         pagina(1), tamanhoPagina(500), todasPaginas(true)
+app.get("/api/pncp/publicadas", async (req, res) => {
+  try {
+    const modalidade = Number(req.query.modalidade);
+    const dataInicial = String(req.query.dataInicial || "");
+    const dataFinal = String(req.query.dataFinal || "");
+    const pagina = Number(req.query.pagina ?? 1);
+    const tamanhoPagina = Math.max(Math.min(Number(req.query.tamanhoPagina ?? 500), 500), 10);
+    const todasPaginas = String(req.query.todasPaginas ?? "true") === "true";
+
+    if (!modalidade || !Number.isInteger(modalidade)) {
+      return res.status(400).json({ error: "modalidade é obrigatória e deve ser um inteiro" });
+    }
+    if (!isYYYYMMDD(dataInicial) || !isYYYYMMDD(dataFinal)) {
+      return res.status(400).json({ error: "dataInicial e dataFinal devem ser AAAAMMDD" });
+    }
+
+    const baseParams = {
+      codigoModalidadeContratacao: modalidade,
+      dataInicial,
+      dataFinal,
+      pagina,
+      tamanhoPagina,
+    };
+
+    const first = await AXIOS.get("/v1/contratacoes/publicacao", { params: baseParams }).then(r => r.data);
+    const results = Array.isArray(first?.conteudo) ? [...first.conteudo] : first?.data || [];
+    const totalPaginas =
+      first?.paginacao?.totalPaginas ??
+      first?.totalPaginas ??
+      1;
+
+    if (todasPaginas && pagina === 1 && totalPaginas > 1) {
+      for (let p = 2; p <= totalPaginas; p++) {
+        const page = await AXIOS.get("/v1/contratacoes/publicacao", {
+          params: { ...baseParams, pagina: p },
+        }).then(r => r.data);
+        const chunk = Array.isArray(page?.conteudo) ? page.conteudo : page?.data || [];
+        results.push(...chunk);
+      }
+    }
+
+    return res.json({
+      paginacao: {
+        paginaAtual: pagina,
+        totalPaginas,
+        totalRegistros: first?.paginacao?.totalRegistros ?? first?.totalRegistros ?? results.length,
+        tamanhoPagina,
+      },
+      conteudo: results,
+    });
+  } catch (err: any) {
+    console.error("ERRO /publicadas:", err?.response?.status, err?.response?.data || err.message);
+    const status = err?.response?.status || 502;
+    return res.status(status).json({ error: "Falha ao consultar PNCP /publicacao", detail: err?.message });
+  }
 });
 
-// Middleware para servir arquivos estáticos em produção
+// Produção: servir build do Vite
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(join(__dirname, 'dist')));
-  
-  // Rota para todas as páginas (SPA)
-  app.get('*', (req, res) => {
-    res.sendFile(join(__dirname, 'dist', 'index.html'));
+  const DIST = join(__dirname, "dist");
+  app.use(express.static(DIST));
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api/")) return next();
+    res.sendFile(join(DIST, "index.html"));
   });
 } else {
-  // Em desenvolvimento, usar Vite dev server
-  const vite = await createViteServer({
-    server: { middlewareMode: true },
-    appType: 'spa'
+  // Em desenvolvimento, apenas servir a API
+  app.get("/", (req, res) => {
+    res.json({ 
+      message: "SIL API - Modo Desenvolvimento", 
+      endpoints: {
+        health: "/api/health",
+        recebendoProposta: "/api/pncp/recebendo-proposta",
+        publicadas: "/api/pncp/publicadas"
+      }
+    });
   });
-  
-  app.use(vite.middlewares);
 }
 
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor rodando na porta ${PORT}`);
-  console.log(`📱 Acesse: http://localhost:${PORT}`);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 SIL rodando em http://localhost:${PORT}`);
+  console.log(`📱 Frontend: http://localhost:${PORT}`);
   console.log(`🔗 API Health: http://localhost:${PORT}/api/health`);
-  console.log(`⚠️  Rotas da API PNCP serão implementadas em breve`);
+  console.log(`🔗 PNCP Recebendo Proposta: http://localhost:${PORT}/api/pncp/recebendo-proposta`);
+  console.log(`🔗 PNCP Publicadas: http://localhost:${PORT}/api/pncp/publicadas`);
 });
