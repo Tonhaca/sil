@@ -254,9 +254,10 @@ export async function buscarLicitacoesRecentes(): Promise<PNCPContratacao[]> {
   console.log('🚀 Carregando licitações mais recentemente adicionadas ao PNCP...');
   
   try {
-    // Busca licitações publicadas nos últimos 30 dias para pegar as mais recentes
-    const dataFinal = formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)); // 30 dias no futuro
-    const dataInicial = formatDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)); // 30 dias atrás
+    // Busca licitações publicadas hoje e nos últimos 7 dias
+    const hoje = new Date();
+    const dataFinal = formatDate(hoje); // Hoje
+    const dataInicial = formatDate(new Date(hoje.getTime() - 7 * 24 * 60 * 60 * 1000)); // 7 dias atrás
     
     console.log('📅 Buscando licitações publicadas entre:', { dataInicial, dataFinal });
 
