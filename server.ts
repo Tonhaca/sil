@@ -194,7 +194,7 @@ app.get("/api/pncp/recentes", async (req, res) => {
     const dias = Math.max(1, parseInt(String(req.query.dias ?? "3"), 10));
     const modalidade = Number(req.query.modalidade ?? 6);
     const limite = Math.max(1, parseInt(String(req.query.limite ?? "50"), 10));
-    const tamanhoPagina = Math.min(Number(req.query.tamanhoPagina ?? 50), 50);
+    const tamanhoPagina = Math.max(Math.min(Number(req.query.tamanhoPagina ?? 50), 50), 10);
 
     if (!Number.isInteger(modalidade)) {
       return res.status(400).json({ error: "modalidade inválida" });
@@ -209,6 +209,7 @@ app.get("/api/pncp/recentes", async (req, res) => {
     
     console.log('🔍 Recentes - Parâmetros:', { dias, modalidade, limite, tamanhoPagina });
     console.log('🔍 Recentes - Datas:', { dInicial, dFinal });
+    console.log('🔍 Recentes - Estratégia: Buscar por período e ordenar no backend por dataInclusao > dataPublicacaoPncp > dataAtualizacao');
 
     // paginação total em /v1/contratacoes/publicacao
     const baseParams = {
@@ -233,9 +234,12 @@ app.get("/api/pncp/recentes", async (req, res) => {
 
     // ordenar: 1) dataInclusao (mais preciso p/ "adicionadas na plataforma")
     //          2) fallback para dataPublicacaoPncp
+    // Conforme manual PNCP: campos 21, 22 e 23 dos "Dados de retorno"
     const toKey = (o: any) => {
       const di = o?.dataInclusao || "";
       const dp = o?.dataPublicacaoPncp || "";
+      const da = o?.dataAtualizacao || "";
+      
       // normaliza AAAA-MM-DDTHH:mm:ssZ, AAAAMMDD, etc.
       const norm = (s: string) => {
         if (!s) return 0;
@@ -243,22 +247,30 @@ app.get("/api/pncp/recentes", async (req, res) => {
         const t = Date.parse(s);
         return isNaN(t) ? 0 : t;
       };
-      return [norm(di), norm(dp)];
+      
+      // Prioridade: dataInclusao > dataPublicacaoPncp > dataAtualizacao
+      return [norm(di), norm(dp), norm(da)];
     };
 
     out.sort((a, b) => {
-      const [adi, adp] = toKey(a);
-      const [bdi, bdp] = toKey(b);
-      // compara inclusão primeiro
+      const [adi, adp, ada] = toKey(a);
+      const [bdi, bdp, bda] = toKey(b);
+      
+      // 1º critério: dataInclusao (mais preciso para "adicionadas na plataforma")
       if (bdi !== adi) return bdi - adi;
-      return bdp - adp;
+      
+      // 2º critério: dataPublicacaoPncp (fallback)
+      if (bdp !== adp) return bdp - adp;
+      
+      // 3º critério: dataAtualizacao (último fallback)
+      return bda - ada;
     });
 
     const topo = out.slice(0, limite);
 
     return res.json({
       janela: { de: dInicial, ate: dFinal, dias },
-      ordenadoPor: ["dataInclusao", "dataPublicacaoPncp"],
+      ordenadoPor: ["dataInclusao", "dataPublicacaoPncp", "dataAtualizacao"],
       totalEncontrado: out.length,
       totalRetornado: topo.length,
       conteudo: topo,
