@@ -13,12 +13,7 @@ export async function handler(req: Request, res: Response) {
     
     console.log(`✅ Retornando ${data.conteudo.length} licitações`);
     
-    res.status(200).json({
-      success: true,
-      data,
-      timestamp: new Date().toISOString(),
-      source: "PNCP"
-    });
+    res.status(200).json(data);
   } catch (err: any) {
     console.error('❌ Erro na rota recebendo-proposta:', err);
     

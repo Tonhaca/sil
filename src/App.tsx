@@ -9,6 +9,8 @@ import { useContratacoes } from './hooks/useContratacoes';
 import { FiltrosContratacao } from './types/pncp';
 
 function App() {
+  console.log('🚀 App component rendering...');
+  
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [contratacaoSelecionada, setContratacaoSelecionada] = useState<string | null>(null);
   const [filtrosAtuais, setFiltrosAtuais] = useState<FiltrosContratacao>({});
@@ -29,6 +31,8 @@ function App() {
     carregarPagina,
     limparResultados,
   } = useContratacoes();
+
+  console.log('📊 App state:', { contratacoes: contratacoes.length, loading, error });
 
   const handleSearch = (termo: string) => {
     // Tenta buscar por item primeiro, depois por termo geral
@@ -116,8 +120,8 @@ function App() {
                       umMesAtras.setMonth(hoje.getMonth() - 1);
                       
                       buscarPorData(
-                        umMesAtras.toISOString().split('T')[0],
-                        hoje.toISOString().split('T')[0]
+                        umMesAtras.toISOString().split('T')[0].replace(/-/g, ''),
+                        hoje.toISOString().split('T')[0].replace(/-/g, '')
                       );
                     }}
                     className="text-sm text-gray-600 hover:text-gray-900"

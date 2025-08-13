@@ -10,7 +10,7 @@ const PropostaQuery = z.object({
     return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`;
   }),
   pagina: z.coerce.number().int().min(1).default(1),
-  tamanhoPagina: z.coerce.number().int().min(10).max(500).default(500),
+  tamanhoPagina: z.coerce.number().int().min(10).max(50).default(50),
   todasPaginas: z.coerce.boolean().default(true),
 });
 
@@ -19,7 +19,7 @@ const PublicadasQuery = z.object({
   dataInicial: z.string().refine(isYYYYMMDD, "dataInicial deve ser AAAAMMDD"),
   dataFinal: z.string().refine(isYYYYMMDD, "dataFinal deve ser AAAAMMDD"),
   pagina: z.coerce.number().int().min(1).default(1),
-  tamanhoPagina: z.coerce.number().int().min(10).max(500).default(500),
+  tamanhoPagina: z.coerce.number().int().min(10).max(50).default(50),
   todasPaginas: z.coerce.boolean().default(true),
 });
 

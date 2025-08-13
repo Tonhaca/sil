@@ -23,7 +23,10 @@ const PNCP_BASE = "https://pncp.gov.br/api/consulta"; // base oficial
 const AXIOS = axios.create({
   baseURL: PNCP_BASE,
   timeout: 30000,
-  headers: { accept: "*/*" },
+  headers: { 
+    accept: "application/json",
+    "User-Agent": "SIL-Sistema-Inteligente-Licitacoes/1.0"
+  },
 });
 
 // util: validar AAAAMMDD
@@ -42,7 +45,7 @@ app.get("/api/pncp/recebendo-proposta", async (req, res) => {
     const modalidade = Number(req.query.modalidade ?? 6);
     const todasPaginas = String(req.query.todasPaginas ?? "true") === "true";
     const pagina = Number(req.query.pagina ?? 1);
-    const tamanhoPagina = Math.max(Math.min(Number(req.query.tamanhoPagina ?? 500), 500), 10);
+    const tamanhoPagina = Math.max(Math.min(Number(req.query.tamanhoPagina ?? 50), 50), 10);
 
     const today = new Date();
     const dataFinal =
@@ -65,6 +68,9 @@ app.get("/api/pncp/recebendo-proposta", async (req, res) => {
       pagina,
       tamanhoPagina,
     };
+
+    console.log('🔍 PNCP Request params:', baseParams);
+    console.log('🔍 PNCP URL:', `${PNCP_BASE}/v1/contratacoes/proposta`);
 
     const first = await AXIOS.get("/v1/contratacoes/proposta", { params: baseParams }).then(r => r.data);
     const results = Array.isArray(first?.data) ? [...first.data] : [];
@@ -95,9 +101,16 @@ app.get("/api/pncp/recebendo-proposta", async (req, res) => {
       conteudo: results,
     });
   } catch (err: any) {
-    console.error("ERRO /recebendo-proposta:", err?.response?.status, err?.response?.data || err.message);
-    const status = err?.response?.status || 502;
-    return res.status(status).json({ error: "Falha ao consultar PNCP /proposta", detail: err?.message });
+    console.error("PNCP ERROR:", {
+      where: "/proposta",
+      status: err?.response?.status,
+      data: err?.response?.data,
+      message: err?.message
+    });
+    res.status(err?.response?.status || 502).json({
+      error: "Falha ao consultar PNCP",
+      detail: err?.response?.data || err?.message
+    });
   }
 });
 
@@ -110,7 +123,7 @@ app.get("/api/pncp/publicadas", async (req, res) => {
     const dataInicial = String(req.query.dataInicial || "");
     const dataFinal = String(req.query.dataFinal || "");
     const pagina = Number(req.query.pagina ?? 1);
-    const tamanhoPagina = Math.max(Math.min(Number(req.query.tamanhoPagina ?? 500), 500), 10);
+    const tamanhoPagina = Math.max(Math.min(Number(req.query.tamanhoPagina ?? 50), 50), 10);
     const todasPaginas = String(req.query.todasPaginas ?? "true") === "true";
 
     if (!modalidade || !Number.isInteger(modalidade)) {
@@ -157,9 +170,16 @@ app.get("/api/pncp/publicadas", async (req, res) => {
       conteudo: results,
     });
   } catch (err: any) {
-    console.error("ERRO /publicadas:", err?.response?.status, err?.response?.data || err.message);
-    const status = err?.response?.status || 502;
-    return res.status(status).json({ error: "Falha ao consultar PNCP /publicacao", detail: err?.message });
+    console.error("PNCP ERROR:", {
+      where: "/publicacao",
+      status: err?.response?.status,
+      data: err?.response?.data,
+      message: err?.message
+    });
+    res.status(err?.response?.status || 502).json({
+      error: "Falha ao consultar PNCP",
+      detail: err?.response?.data || err?.message
+    });
   }
 });
 
