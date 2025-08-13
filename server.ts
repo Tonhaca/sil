@@ -183,6 +183,92 @@ app.get("/api/pncp/publicadas", async (req, res) => {
   }
 });
 
+// --- NOVA ROTA: /api/pncp/recentes ---
+// Params:
+//   dias (default 3): janela relativa (hoje - dias ... hoje)
+//   modalidade (default 6): código obrigatório pra /publicacao
+//   limite (default 50): corta o topo depois da ordenação
+//   tamanhoPagina (default 500): máximo suportado
+app.get("/api/pncp/recentes", async (req, res) => {
+  try {
+    const dias = Math.max(1, parseInt(String(req.query.dias ?? "3"), 10));
+    const modalidade = Number(req.query.modalidade ?? 6);
+    const limite = Math.max(1, parseInt(String(req.query.limite ?? "50"), 10));
+    const tamanhoPagina = Math.min(Number(req.query.tamanhoPagina ?? 50), 50);
+
+    if (!Number.isInteger(modalidade)) {
+      return res.status(400).json({ error: "modalidade inválida" });
+    }
+
+    // datas AAAAMMDD (API exige esse formato)
+    const hoje = new Date();
+    const dFinal = `${hoje.getFullYear()}${String(hoje.getMonth()+1).padStart(2,"0")}${String(hoje.getDate()).padStart(2,"0")}`;
+    const ini = new Date(hoje);
+    ini.setDate(ini.getDate() - dias - 1); // coloco 1 dia de buffer
+    const dInicial = `${ini.getFullYear()}${String(ini.getMonth()+1).padStart(2,"0")}${String(ini.getDate()).padStart(2,"0")}`;
+    
+    console.log('🔍 Recentes - Parâmetros:', { dias, modalidade, limite, tamanhoPagina });
+    console.log('🔍 Recentes - Datas:', { dInicial, dFinal });
+
+    // paginação total em /v1/contratacoes/publicacao
+    const baseParams = {
+      codigoModalidadeContratacao: modalidade,
+      dataInicial: dInicial,
+      dataFinal: dFinal,
+      pagina: 1,
+      tamanhoPagina,
+    };
+
+    const first = await AXIOS.get("/v1/contratacoes/publicacao", { params: baseParams }).then(r => r.data);
+    const out = Array.isArray(first?.conteudo) ? [...first.conteudo] : (first?.data || []);
+    const totalPaginas = first?.paginacao?.totalPaginas ?? first?.totalPaginas ?? 1;
+
+    for (let p = 2; p <= totalPaginas; p++) {
+      const page = await AXIOS.get("/v1/contratacoes/publicacao", {
+        params: { ...baseParams, pagina: p },
+      }).then(r => r.data);
+      const chunk = Array.isArray(page?.conteudo) ? page.conteudo : (page?.data || []);
+      out.push(...chunk);
+    }
+
+    // ordenar: 1) dataInclusao (mais preciso p/ "adicionadas na plataforma")
+    //          2) fallback para dataPublicacaoPncp
+    const toKey = (o: any) => {
+      const di = o?.dataInclusao || "";
+      const dp = o?.dataPublicacaoPncp || "";
+      // normaliza AAAA-MM-DDTHH:mm:ssZ, AAAAMMDD, etc.
+      const norm = (s: string) => {
+        if (!s) return 0;
+        if (/^\d{8}$/.test(s)) return Number(s); // AAAAMMDD -> número comparável
+        const t = Date.parse(s);
+        return isNaN(t) ? 0 : t;
+      };
+      return [norm(di), norm(dp)];
+    };
+
+    out.sort((a, b) => {
+      const [adi, adp] = toKey(a);
+      const [bdi, bdp] = toKey(b);
+      // compara inclusão primeiro
+      if (bdi !== adi) return bdi - adi;
+      return bdp - adp;
+    });
+
+    const topo = out.slice(0, limite);
+
+    return res.json({
+      janela: { de: dInicial, ate: dFinal, dias },
+      ordenadoPor: ["dataInclusao", "dataPublicacaoPncp"],
+      totalEncontrado: out.length,
+      totalRetornado: topo.length,
+      conteudo: topo,
+    });
+  } catch (err: any) {
+    console.error("PNCP ERROR /recentes:", err?.response?.status, err?.response?.data || err.message);
+    res.status(err?.response?.status || 502).json({ error: "Falha ao consultar PNCP /publicacao", detail: err?.message });
+  }
+});
+
 // Produção: servir build do Vite
 if (process.env.NODE_ENV === 'production') {
   const DIST = join(__dirname, "dist");
@@ -199,7 +285,8 @@ if (process.env.NODE_ENV === 'production') {
       endpoints: {
         health: "/api/health",
         recebendoProposta: "/api/pncp/recebendo-proposta",
-        publicadas: "/api/pncp/publicadas"
+        publicadas: "/api/pncp/publicadas",
+        recentes: "/api/pncp/recentes"
       }
     });
   });
@@ -212,4 +299,5 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(`🔗 API Health: http://localhost:${PORT}/api/health`);
   console.log(`🔗 PNCP Recebendo Proposta: http://localhost:${PORT}/api/pncp/recebendo-proposta`);
   console.log(`🔗 PNCP Publicadas: http://localhost:${PORT}/api/pncp/publicadas`);
+  console.log(`🔗 PNCP Recentes: http://localhost:${PORT}/api/pncp/recentes`);
 });
